@@ -1,0 +1,8 @@
+# Rebuilt inside the image; the API URL arrives as a build-arg.
+node_modules
+dist
+dist-ssr
+.env
+.env.*
+!.env.example
+.git

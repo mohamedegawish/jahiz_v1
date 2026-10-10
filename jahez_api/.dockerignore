@@ -1,0 +1,16 @@
+# Keep the image lean and secret-free: runtime configuration arrives as
+# container environment (docker-compose.yml `env_file`), never baked in.
+.env
+.env.*
+!.env.example
+/vendor
+/node_modules
+/storage/logs/*
+/storage/app/private/*
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+.git
+.gitignore
+.phpunit.cache
+.phpunit.result.cache

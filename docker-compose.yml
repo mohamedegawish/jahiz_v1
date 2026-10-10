@@ -1,0 +1,79 @@
+# Full Jahez stack: MySQL + Laravel API + queue worker + built frontend.
+#
+# Usage (from this directory):
+#   1. cp .env.docker.example .env.docker   # then fill in the secrets below
+#   2. docker compose up -d --build
+#   3. docker compose exec api php artisan app:check-production
+#
+# The API entrypoint runs migrations on every start, so an update is:
+#   git pull && docker compose up -d --build
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-jahez}
+      MYSQL_USER: ${DB_USERNAME:-jahez}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.docker}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env.docker}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      # CMD-SHELL (not CMD): the password must expand from the container environment.
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  api:
+    build: ./jahez_api
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+    volumes:
+      # Uploaded documents and the SQLite-free runtime state live here.
+      - api-storage:/var/www/html/storage
+    ports:
+      - "8000:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  queue:
+    build: ./jahez_api
+    restart: unless-stopped
+    command: ["php", "artisan", "queue:work", "--tries=3", "--sleep=3"]
+    env_file:
+      - .env.docker
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+    volumes:
+      - api-storage:/var/www/html/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./front
+      args:
+        VITE_API_BASE_URL: ${FRONT_API_URL:-http://localhost:8000/api/v1}
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
+  mysql-data:
+  api-storage:

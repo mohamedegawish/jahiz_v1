@@ -1,0 +1,6 @@
+# Local-only runtime files. Sub-projects ignore their own .env / vendor /
+# node_modules / dist themselves; these cover the repository root.
+.playwright-mcp/
+*.bak
+*.log
+.env.docker

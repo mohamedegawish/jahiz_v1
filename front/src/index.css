@@ -1,0 +1,590 @@
+﻿@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-brand-blue: #004A93;
+    --color-brand-blue-soft: #E9F0FA;
+    --color-brand-orange: #E67E00;
+    --color-brand-orange-soft: #FFEDD5;
+    --color-brand-navy: #002E4A;
+    --color-brand-orange-deep: #B96A00;
+    
+    --color-text-main: #172033;
+    --color-text-secondary: #667085;
+    --color-bg-main: #F7F9FC;
+    --color-surface: #FFFFFF;
+    --color-border: #E6EAF0;
+    
+    --color-success: #35B779;
+    --color-warning: #F2B84B;
+    --color-error: #E45B6A;
+    --color-info: #5B9DED;
+  }
+
+  body {
+    font-family: 'Cairo', 'IBM Plex Sans Arabic', 'Inter', 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--color-bg-main);
+    color: var(--color-text-main);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Balanced headline wrapping (no orphan words in headings) */
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F4F9;
+}
+::-webkit-scrollbar-thumb {
+  background: #C9D4E2;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #E67E00;
+}
+
+/* 
+=======================================================================
+Card Hover Elevation & Color Transition:
+"اي card يعمل لون ويظهر لاعلي عند لمسه"
+=======================================================================
+*/
+.jahez-card {
+  background-color: #FFFFFF;
+  border: 1px solid #E6EAF0;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px 0 rgba(23, 32, 51, 0.04), 0 2px 6px -1px rgba(23, 32, 51, 0.02);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s ease,
+              background 0.25s ease;
+  position: relative;
+}
+
+/* Card hover: a calm 3px lift with a brand-tinted shadow (no layout jump, no GPU tax) */
+.jahez-card:hover {
+  transform: translateY(-3px);
+  border-color: #E67E00;
+  background: linear-gradient(180deg, #FFFFFF 45%, #FFFBEC 100%);
+  box-shadow: 0 12px 28px -8px rgba(0, 62, 130, 0.18), 0 6px 14px -6px rgba(8, 119, 232, 0.20);
+}
+
+/* Card active/touch feedback */
+.jahez-card:active {
+  transform: translateY(-1px) scale(0.995);
+  box-shadow: 0 8px 20px -4px rgba(0, 62, 130, 0.14);
+}
+
+/* Hero portal cards: hover turns the card into transparent glass revealing the
+   deep-blue hero background (text turns white via group-hover utilities). */
+.jahez-hero-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 18px 44px -10px rgba(1, 6, 20, 0.65), 0 0 34px rgba(230, 126, 0, 0.28);
+}
+.jahez-hero-card:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.jahez-card-accent-blue {
+  border-right: 4px solid #004A93;
+}
+
+.jahez-card-accent-purple {
+  border-right: 4px solid #E67E00;
+}
+
+/* Subtle Gradient Accents */
+.jahez-gradient-brand {
+  background: linear-gradient(135deg, #004A93 0%, #E67E00 100%);
+}
+
+.jahez-gradient-subtle {
+  background: linear-gradient(135deg, rgba(8, 119, 232, 0.08) 0%, rgba(255, 138, 0, 0.08) 100%);
+}
+
+.jahez-gradient-text {
+  background: linear-gradient(135deg, #002E4A 0%, #004A93 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* =========================================================================
+   Ad strip — admin-managed ads, sits BELOW the hero section
+   ========================================================================= */
+.jahez-ad-strip {
+  width: 100%;
+  background: #ffffff;
+          border-b: 1px solid #e6eaf0;
+  padding: 14px 0 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f0f4fa 100%);
+}
+
+.jahez-ad-strip__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 1280px;
+  margin: 0 auto 10px;
+  padding: 0 16px;
+}
+
+.jahez-ad-strip__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #172033;
+}
+
+.jahez-ad-strip__title svg {
+  width: 16px;
+  height: 16px;
+  color: #002E4A;
+}
+
+.jahez-ad-strip__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #004A93 0%, #E67E00 100%);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.jahez-ad-strip__add:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(0, 82, 169, 0.30);
+}
+
+.jahez-ad-strip__add svg {
+  width: 14px;
+  height: 14px;
+}
+
+.jahez-ad-strip__empty {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 16px;
+  font-size: 12px;
+  color: #667085;
+  text-align: center;
+}
+
+/* =========================================================================
+   Homepage Ad Slider — ONE full-width RTL slider of admin-managed ads
+   ========================================================================= */
+.jahez-ad-slider {
+  position: relative;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 16px 32px; /* bottom space reserved for the dots row */
+}
+
+.jahez-ad-slider__viewport {
+  display: grid;
+  overflow: hidden;
+  border-radius: 28px;
+  background: #ffffff;
+}
+
+/* every slide stacks in the same grid cell */
+.jahez-ad-slider__slide {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+/* the card fills its slide — no marquee fixed width, no trailing gap */
+.jahez-ad-slider .jahez-ad-card.jahez-ad-slide {
+  flex: none;
+  width: 100%;
+  height: 100%;
+  margin-inline-end: 0;
+}
+
+.jahez-ad-slider .jahez-ad-card .notched-card__body {
+  padding: 18px 20px;
+  gap: 8px;
+}
+.jahez-ad-slider .jahez-ad-card .notched-card__title {
+  font-size: 18px;
+}
+
+.jahez-ad-slider .jahez-ad-card .notched-card__desc {
+  font-size: 13px;
+  -webkit-line-clamp: 3;
+}
+
+/* the lift would expose the clipped edge inside the viewport — keep the shadow only */
+.jahez-ad-slider .jahez-ad-card:hover {
+  transform: none;
+}
+
+/* arrows: RTL mirror — next points left on the left edge, prev on the right */
+.jahez-ad-slider__arrow {
+  position: absolute;
+  top: calc((100% - 32px) / 2); /* centre on the viewport, dots excluded */
+  transform: translateY(-50%);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid #e6eaf0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #002E4A;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(23, 32, 51, 0.14);
+  backdrop-filter: blur(4px);
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.jahez-ad-slider__arrow:hover {
+  background: #002E4A;
+  border-color: #002E4A;
+  color: #ffffff;
+}
+
+.jahez-ad-slider__arrow:active {
+  transform: translateY(-50%) scale(0.94);
+}
+
+.jahez-ad-slider__arrow--next {
+  left: 24px;
+}
+
+.jahez-ad-slider__arrow--prev {
+  right: 24px;
+}
+
+.jahez-ad-slider__arrow svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* dots: active becomes a wider orange pill */
+.jahez-ad-slider__dots {
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.jahez-ad-slider__dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: #CCD5E2;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    width 0.25s ease;
+}
+
+.jahez-ad-slider__dot:hover {
+  background: #98a2b3;
+}
+
+.jahez-ad-slider__dot[aria-current='true'] {
+  width: 22px;
+  background: #E67E00;
+}
+
+/* md+: the card becomes a horizontal banner (cover 44% on the RTL right) */
+@media (min-width: 768px) {
+  .jahez-ad-slider .jahez-ad-card {
+    min-height: 320px;
+  }
+
+  .jahez-ad-slider .notched-card__link {
+    flex: 1; /* fill the card's min-height so the banner has no empty tail */
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .jahez-ad-slider .notched-card__link > .relative {
+    flex: 0 0 44%;
+    min-width: 0;
+  }
+
+  .jahez-ad-slider .notched-card__link > .relative > div:first-child {
+    aspect-ratio: auto !important; /* beats the inline 16/9; the cover fills the banner */
+    height: 100%;
+  }
+
+  .jahez-ad-slider .jahez-ad-card .notched-card__body {
+    justify-content: center;
+    padding: 24px 28px;
+  }
+
+  .jahez-ad-slider .jahez-ad-card .notched-card__title {
+    font-size: 22px;
+  }
+
+  .jahez-ad-slider .jahez-ad-card .notched-card__desc {
+    font-size: 14px;
+    -webkit-line-clamp: 4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jahez-ad-slider__slide,
+  .jahez-ad-slider__arrow,
+  .jahez-ad-slider__dot {
+    transition: none !important;
+  }
+}
+
+/* mobile: the stacked card's notch disc lands at the arrows' vertical center —
+   hide the redundant disc (the notch cut stays) so the circles don't stack */
+@media (max-width: 767px) {
+  .jahez-ad-slider .notched-card__arrow {
+    display: none;
+  }
+}
+
+/* =========================================================================
+   JAHEZ Ad Card — NotchedProjectCard skin (scoped .jahez-ad-card, BEM)
+   Cover: 16/9 photo + centered date badge + bottom-right notch with arrow
+   Overlay: admin pencil | Body: title / desc / tags
+   Border: very light per-theme focus tint (--ad-focus) from the platform palette
+   ========================================================================= */
+.jahez-ad-card {
+  --ad-accent: #0062CC;
+  --ad-soft: #DDEBFD;
+  --ad-ink: #004A93;
+  --ad-focus: #DDEBFD;
+
+  flex: 0 0 300px;
+  margin-inline-end: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid var(--ad-focus);
+  border-radius: 28px;
+  text-align: right;
+  direction: rtl;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(23, 32, 51, 0.06);
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.jahez-ad-card--green {
+  --ad-accent: #35b779;
+  --ad-soft: #e7f8ee;
+  --ad-ink: #1d7e4c;
+  --ad-focus: #d7f2e5;
+}
+
+.jahez-ad-card--blue {
+  --ad-accent: #004A93;
+  --ad-soft: #E9F0FA;
+  --ad-ink: #003a75;
+  --ad-focus: #DDEBFD;
+}
+
+.jahez-ad-card--orange {
+  --ad-accent: #E67E00;
+  --ad-soft: #FFEDD5;
+  --ad-ink: #7b3a00;
+  --ad-focus: #FEDCC2;
+}
+
+.jahez-ad-card--red {
+  --ad-accent: #e45b6a;
+  --ad-soft: #fdecee;
+  --ad-ink: #B82B3B;
+  --ad-focus: #fadde1;
+}
+
+.jahez-ad-card--beige {
+  --ad-accent: #c9a66b;
+  --ad-soft: #f8f2e6;
+  --ad-ink: #8C5D08;
+  --ad-focus: #f1e9d9;
+}
+
+.jahez-ad-card--purple {
+  --ad-accent: #E67E00;
+  --ad-soft: #DDEBFD;
+  --ad-ink: #002E4A;
+  --ad-focus: #C7D7F0;
+}
+
+/* Admin edit pencil (rendered in the card overlay when onEdit is passed) */
+.jahez-ad-card__edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ad-ink);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(23, 32, 51, 0.14);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.jahez-ad-card__edit:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 10px rgba(23, 32, 51, 0.18);
+}
+
+.jahez-ad-card__edit svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Body */
+.jahez-ad-card .notched-card__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+}
+
+.jahez-ad-card .notched-card__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: #172033;
+  transition: color 0.25s ease;
+}
+
+.jahez-ad-card:hover .notched-card__title {
+  color: var(--ad-ink);
+}
+
+.jahez-ad-card .notched-card__desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #667085;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Cover badge: date shown as a light pill instead of dark glass */
+.jahez-ad-card .notched-card__badge {
+  background: #ffffff;
+  border: 1px solid var(--ad-focus);
+  color: var(--ad-ink);
+}
+
+.jahez-ad-card .notched-card__tags {
+  margin-top: 4px;
+}
+
+.jahez-ad-card .notched-card__tags li {
+  background: var(--ad-soft);
+  color: var(--ad-ink);
+}
+
+/* Footer */
+.notched-card__link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.notched-card__footer {
+  margin-top: auto;
+}
+
+.notched-card:has(.notched-card__link:focus-visible) {
+  outline: 2px solid var(--notched-focus, #FFE2C7);
+  outline-offset: 3px;
+}
+
+/* Hover lift — border keeps the light focus tint (no loud accent) */
+.jahez-ad-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 30px rgba(23, 32, 51, 0.12);
+  border-color: var(--ad-focus);
+}
+
+/* Admin live preview: neutralize trailing gap so the card centers */
+.jahez-ad-preview .jahez-ad-card {
+  margin-inline-end: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jahez-ad-card,
+  .notched-card__title,
+  .jahez-ad-card__edit {
+    transition: none;
+  }
+
+  .jahez-ad-card:hover {
+    transform: none;
+  }
+
+  .jahez-ad-card__edit:hover {
+    transform: none;
+  }
+}
+
+/* Ad-card skin used in a grid (service listings): fill the cell instead of the marquee's fixed width. */
+.jahez-ad-card.jahez-ad-card--grid {
+  flex: none;
+  width: 100%;
+  height: 100%;
+  margin-inline-end: 0;
+}
+
+.jahez-ad-card.jahez-ad-card--grid .notched-card__footer {
+  padding: 0 14px 14px;
+  border-top: 1px solid #f1f4f9;
+}
+
