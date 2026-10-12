@@ -10,11 +10,12 @@ FROM php:8.2-apache
 # zip, bcmath, intl, fileinfo, opcache). No image library: uploads are only
 # validated by detected content type, never processed.
 # The package index update is retried: a transient mirror/DNS failure on the
-# build host must not fail the whole deployment.
-RUN for attempt in 1 2 3; do \
+# build host must not fail the whole deployment (a mirror sync can take
+# minutes, so this spans ~4 minutes before giving up).
+RUN for attempt in 1 2 3 4 5; do \
         if apt-get update; then break; fi; \
-        if [ "$attempt" = 3 ]; then exit 1; fi; \
-        sleep 15; \
+        if [ "$attempt" = 5 ]; then exit 1; fi; \
+        sleep 60; \
     done \
     && apt-get install -y --no-install-recommends \
         curl \
