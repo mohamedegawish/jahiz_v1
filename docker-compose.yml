@@ -1,12 +1,27 @@
-# Full Jahez stack: MySQL + Laravel API + queue worker + built frontend.
+# Full Jahez stack: MySQL + Laravel API + queue worker + scheduler + built frontend.
 #
-# Usage (from this directory):
+# Local usage (from this directory):
 #   1. cp .env.docker.example .env.docker   # then fill in the secrets below
-#   2. docker compose up -d --build
-#   3. docker compose exec api php artisan app:check-production
+#   2. docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#   3. docker compose --env-file .env.docker exec api php artisan app:check-production
 #
-# The API entrypoint runs migrations on every start, so an update is:
-#   git pull && docker compose up -d --build
+# Coolify usage: deploy this repository as a "Docker Compose" resource with base
+# directory = repository root. Do NOT add docker-compose.local.yml there.
+# Every ${VAR} below becomes an editable variable in the Coolify UI
+# (Environment Variables); ${VAR:?message} blocks deployment while empty.
+# Configure two domains in Coolify, both pointing at internal port 80:
+#   api service      -> https://api.example.com
+#   frontend service -> https://app.example.com
+# Then set APP_URL / FRONTEND_URL / FRONT_API_URL / CORS_ALLOWED_ORIGINS
+# to those domains (see .env.docker.example).
+#
+# No service publishes host ports: traffic enters only through the Coolify
+# proxy (TLS), and services reach each other by service name. The API
+# entrypoint runs migrations on every start, so an update is:
+#   git pull && docker compose up -d --build   (Coolify: redeploy / webhook)
+#
+# The frontend bakes FRONT_API_URL at build time: changing it requires a
+# rebuild (`docker compose up -d --build frontend`, or a Coolify redeploy).
 
 services:
   mysql:
@@ -15,12 +30,12 @@ services:
     environment:
       MYSQL_DATABASE: ${DB_DATABASE:-jahez}
       MYSQL_USER: ${DB_USERNAME:-jahez}
-      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.docker}
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env.docker}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.docker (local) or the Coolify environment variables}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env.docker (local) or the Coolify environment variables}
     volumes:
       - mysql-data:/var/lib/mysql
-    ports:
-      - "3306:3306"
+    expose:
+      - "3306"
     healthcheck:
       # CMD-SHELL (not CMD): the password must expand from the container environment.
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD"]
@@ -32,16 +47,47 @@ services:
   api:
     build: ./jahez_api
     restart: unless-stopped
-    env_file:
-      - .env.docker
     environment:
+      APP_NAME: ${APP_NAME:-Jahez}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_KEY: ${APP_KEY:?Generate with `php artisan key:generate --show` and paste it here}
+      APP_URL: ${APP_URL:?Set the public HTTPS API URL, e.g. https://api.example.com}
+      FRONTEND_URL: ${FRONTEND_URL:?Set the public HTTPS frontend URL, e.g. https://app.example.com}
+      LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      DB_CONNECTION: ${DB_CONNECTION:-mysql}
       DB_HOST: mysql
       DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-jahez}
+      DB_USERNAME: ${DB_USERNAME:-jahez}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.docker (local) or the Coolify environment variables}
+      SESSION_DRIVER: ${SESSION_DRIVER:-array}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
+      CACHE_STORE: ${CACHE_STORE:-database}
+      SANCTUM_EXPIRATION: ${SANCTUM_EXPIRATION:-480}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-*}
+      JAHEZ_BUSINESS_TIMEZONE: ${JAHEZ_BUSINESS_TIMEZONE:-Africa/Cairo}
+      MAIL_MAILER: ${MAIL_MAILER:?Set a real mailer (smtp); the go-live gate refuses log/array}
+      MAIL_SCHEME: ${MAIL_SCHEME:-smtp}
+      MAIL_HOST: ${MAIL_HOST:?Set the SMTP host}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:?Set the sender address, e.g. noreply@example.com}
     volumes:
       # Uploaded documents and the SQLite-free runtime state live here.
       - api-storage:/var/www/html/storage
-    ports:
-      - "8000:80"
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     depends_on:
       mysql:
         condition: service_healthy
@@ -50,11 +96,80 @@ services:
     build: ./jahez_api
     restart: unless-stopped
     command: ["php", "artisan", "queue:work", "--tries=3", "--sleep=3"]
-    env_file:
-      - .env.docker
     environment:
+      APP_NAME: ${APP_NAME:-Jahez}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_KEY: ${APP_KEY:?Generate with `php artisan key:generate --show` and paste it here}
+      APP_URL: ${APP_URL:?Set the public HTTPS API URL, e.g. https://api.example.com}
+      FRONTEND_URL: ${FRONTEND_URL:?Set the public HTTPS frontend URL, e.g. https://app.example.com}
+      LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      DB_CONNECTION: ${DB_CONNECTION:-mysql}
       DB_HOST: mysql
       DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-jahez}
+      DB_USERNAME: ${DB_USERNAME:-jahez}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.docker (local) or the Coolify environment variables}
+      SESSION_DRIVER: ${SESSION_DRIVER:-array}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
+      CACHE_STORE: ${CACHE_STORE:-database}
+      SANCTUM_EXPIRATION: ${SANCTUM_EXPIRATION:-480}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-*}
+      JAHEZ_BUSINESS_TIMEZONE: ${JAHEZ_BUSINESS_TIMEZONE:-Africa/Cairo}
+      MAIL_MAILER: ${MAIL_MAILER:?Set a real mailer (smtp); the go-live gate refuses log/array}
+      MAIL_SCHEME: ${MAIL_SCHEME:-smtp}
+      MAIL_HOST: ${MAIL_HOST:?Set the SMTP host}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:?Set the sender address, e.g. noreply@example.com}
+    volumes:
+      - api-storage:/var/www/html/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  scheduler:
+    # Runs the Laravel scheduler (sanctum:prune-expired, payments:reconcile)
+    # every minute, so no host cron is needed on Coolify.
+    build: ./jahez_api
+    restart: unless-stopped
+    command: ["php", "artisan", "schedule:work"]
+    environment:
+      APP_NAME: ${APP_NAME:-Jahez}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_KEY: ${APP_KEY:?Generate with `php artisan key:generate --show` and paste it here}
+      APP_URL: ${APP_URL:?Set the public HTTPS API URL, e.g. https://api.example.com}
+      FRONTEND_URL: ${FRONTEND_URL:?Set the public HTTPS frontend URL, e.g. https://app.example.com}
+      LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      DB_CONNECTION: ${DB_CONNECTION:-mysql}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-jahez}
+      DB_USERNAME: ${DB_USERNAME:-jahez}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.docker (local) or the Coolify environment variables}
+      SESSION_DRIVER: ${SESSION_DRIVER:-array}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
+      CACHE_STORE: ${CACHE_STORE:-database}
+      SANCTUM_EXPIRATION: ${SANCTUM_EXPIRATION:-480}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-*}
+      JAHEZ_BUSINESS_TIMEZONE: ${JAHEZ_BUSINESS_TIMEZONE:-Africa/Cairo}
+      MAIL_MAILER: ${MAIL_MAILER:?Set a real mailer (smtp); the go-live gate refuses log/array}
+      MAIL_SCHEME: ${MAIL_SCHEME:-smtp}
+      MAIL_HOST: ${MAIL_HOST:?Set the SMTP host}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:?Set the sender address, e.g. noreply@example.com}
     volumes:
       - api-storage:/var/www/html/storage
     depends_on:
@@ -69,8 +184,14 @@ services:
       args:
         VITE_API_BASE_URL: ${FRONT_API_URL:-http://localhost:8000/api/v1}
     restart: unless-stopped
-    ports:
-      - "3000:80"
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     depends_on:
       - api
 

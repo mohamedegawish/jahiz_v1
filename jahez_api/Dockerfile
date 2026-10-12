@@ -10,6 +10,7 @@ FROM php:8.2-apache
 # zip, bcmath, intl, fileinfo, opcache). No image library: uploads are only
 # validated by detected content type, never processed.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
         git \
         unzip \
         libzip-dev \

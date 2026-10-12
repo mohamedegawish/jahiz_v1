@@ -1,0 +1,20 @@
+# Local-only override: publish ports on the host so the stack can be reached
+# directly (http://localhost:8000 for the API, http://localhost:3000 for the
+# frontend). NEVER use this file on Coolify / production: published host ports
+# bypass the proxy (TLS) and would even expose MySQL publicly.
+#
+# Usage (from the repository root):
+#   docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.local.yml up -d --build
+
+services:
+  mysql:
+    ports:
+      - "3306:3306"
+
+  api:
+    ports:
+      - "8000:80"
+
+  frontend:
+    ports:
+      - "3000:80"

@@ -113,20 +113,22 @@ php artisan app:create-admin admin@example.org "Full Name"   # first deployment 
 
 ## 7. Docker deployment
 
-The repository root holds a production Compose stack (`docker-compose.yml`, `jahez_api/Dockerfile`, `front/Dockerfile`): MySQL 8.4, the API on Apache (migrations + config/route/view caching run in the entrypoint on every start), a queue worker from the same image, and the built frontend on nginx with an SPA fallback. Uploaded documents persist in the `api-storage` volume; the database in `mysql-data`.
+The repository root holds a production Compose stack (`docker-compose.yml`, `jahez_api/Dockerfile`, `front/Dockerfile`): MySQL 8.4, the API on Apache (migrations + config/route/view caching run in the entrypoint on every start), a queue worker and a scheduler (`schedule:work`: `sanctum:prune-expired`, `payments:reconcile`) from the same image, and the built frontend on nginx with an SPA fallback. Uploaded documents persist in the `api-storage` volume; the database in `mysql-data`. No host ports are published: HTTP reaches the containers only through the reverse proxy / Coolify domains, and MySQL is reachable only inside the Compose network.
 
 ```bash
 cp .env.docker.example .env.docker   # fill in APP_KEY, passwords, URLs, mail
-docker compose up -d --build
-docker compose exec api php artisan app:check-production   # must PASS before going live
-docker compose exec api php artisan app:create-admin admin@example.org "Full Name"
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.local.yml up -d --build   # local test (adds :8000/:3000/:3306)
+docker compose --env-file .env.docker exec api php artisan app:check-production   # must PASS before going live
+docker compose --env-file .env.docker exec api php artisan app:create-admin admin@example.org "Full Name"
 ```
+
+Deploying on Coolify: add the repository as a Docker Compose resource with the base directory at the repository root (do not include `docker-compose.local.yml`), paste the `.env.docker` values into the resource's Environment Variables (every `${VAR}` in `docker-compose.yml` is detected there automatically; `${VAR:?…}` entries block deployment while empty), and add one domain on the `api` service (internal port 80, e.g. `https://api.example.com`) and one on the `frontend` service (internal port 80, e.g. `https://app.example.com`). Set `FRONT_API_URL` as a build-time variable as well: it is baked into the frontend image, so changing it requires a redeploy with rebuild. Post-deploy, open the `api` container's terminal in Coolify and run `php artisan app:check-production` (must PASS) and, on the first deploy only, `php artisan app:create-admin admin@example.org "Full Name"`.
 
 Notes:
 
-- `APP_KEY`: generate with `docker run --rm <api-image> php artisan key:generate --show` and paste it into `.env.docker`. Never reuse a development key.
-- `VITE_API_BASE_URL` is baked into the frontend at build time (`FRONT_API_URL`); changing it needs `docker compose up -d --build frontend`.
-- Terminate TLS in front of the stack (reverse proxy / load balancer) and set `TRUSTED_PROXIES` so the app sees HTTPS; the go-live gate (§1) refuses plain-http `APP_URL` / `FRONTEND_URL`.
+- `APP_KEY`: generate with `php artisan key:generate --show` from `jahez_api/` and paste it into `.env.docker` (or the Coolify variables). Never reuse a development key.
+- `VITE_API_BASE_URL` is baked into the frontend at build time (`FRONT_API_URL`); changing it needs `docker compose up -d --build frontend` (or a Coolify redeploy).
+- Terminate TLS in front of the stack (reverse proxy / Coolify proxy) and set `TRUSTED_PROXIES` so the app sees HTTPS; the go-live gate (§1) refuses plain-http `APP_URL` / `FRONTEND_URL`. `CORS_ALLOWED_ORIGINS` must be the exact frontend origin.
 - Queue jobs are `database`-backed, so no Redis is required; the `queue` service is the process supervisor's equivalent here.
-- Sanctum token pruning (`sanctum:prune-expired`) runs on the Laravel scheduler: add a cron on the host (`* * * * * docker compose exec -T api php artisan schedule:run`) or a scheduler container.
+- No host cron is needed: the `scheduler` service runs `php artisan schedule:work` (covers `sanctum:prune-expired` and `payments:reconcile`).
 - This stack has not been exercised on a real server yet (same status as §1–§6 above).

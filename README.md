@@ -19,16 +19,17 @@ Details per part: `jahez_api/README.md`, `front/README.md`. API conventions: `ja
 
 ## Deploy with Docker
 
-Production Compose stack at the repository root (MySQL 8.4 + API on Apache + queue worker + built frontend on nginx).
+Production Compose stack at the repository root (MySQL 8.4 + API on Apache + queue worker + scheduler + built frontend on nginx). No host ports are published: traffic enters through the reverse proxy / Coolify domains.
 
 ```bash
 cp .env.docker.example .env.docker   # fill in APP_KEY, passwords, URLs, mail
-docker compose up -d --build
-docker compose exec api php artisan app:check-production   # must PASS before going live
-docker compose exec api php artisan app:create-admin admin@example.org "Full Name"  # first deploy only
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.local.yml up -d --build   # local test (publishes :8000/:3000)
+docker compose --env-file .env.docker exec api php artisan app:check-production   # must PASS before going live
+docker compose --env-file .env.docker exec api php artisan app:create-admin admin@example.org "Full Name"  # first deploy only
 ```
 
-- Generate `APP_KEY` with `docker run --rm <api-image> php artisan key:generate --show` (never reuse a dev key).
-- Update: `git pull && docker compose up -d --build` (migrations run automatically on start).
+- Generate `APP_KEY` with `php artisan key:generate --show` from `jahez_api/` (never reuse a dev key).
+- Update: `git pull && docker compose --env-file .env.docker up -d --build` (migrations run automatically on start).
+- Coolify: deploy the repo as a Docker Compose resource (base = repo root, without `docker-compose.local.yml`), paste `.env.docker` values into Environment Variables, add one domain per `api` / `frontend` service (internal port 80). Redeploy to update.
 - Terminate TLS in front of the stack and set `TRUSTED_PROXIES`; the go-live gate refuses plain-http URLs.
 - Full notes: `jahez_api/docs/deployment.md` (§7) and `.env.docker.example`.

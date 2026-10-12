@@ -1,5 +1,5 @@
 # Keep the image lean and secret-free: runtime configuration arrives as
-# container environment (docker-compose.yml `env_file`), never baked in.
+# container environment (docker-compose.yml `environment:`), never baked in.
 .env
 .env.*
 !.env.example
