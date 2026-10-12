@@ -1491,6 +1491,104 @@ export interface AnnouncementPayload {
   ends_at?: string | null;
 }
 
+// ───────────────────────── Landing-page content (admin-managed) ─────────────────────────
+
+/** The hero tabs whose headline IMC edits (tab labels are the client navigation and stay fixed). */
+export type LandingHeroTab = 'home' | 'assessment' | 'digital' | 'smart' | 'results';
+
+export interface LandingQuickFact {
+  value: string;
+  label: string;
+}
+
+export interface LandingServiceCard {
+  title: string;
+  description: string;
+  meta: string | null;
+}
+
+export interface LandingHowStep {
+  title: string;
+  description: string;
+  cta: string | null;
+}
+
+export interface LandingFaqItem {
+  question: string;
+  answer: string;
+}
+
+/** LandingSettingResource: null (or an empty list) means the web client falls back to its bundled copy. */
+export interface LandingSettings {
+  /** Relative to the API base URL (public); null when no logo was uploaded. */
+  logo_path: string | null;
+  hero_kicker: string | null;
+  hero_headline: string | null;
+  hero_tab_headlines: Partial<Record<LandingHeroTab, string>>;
+  hero_subtitle: string | null;
+  hero_primary_cta: string | null;
+  hero_secondary_cta: string | null;
+  trust_facts: string[];
+  join_title: string | null;
+  join_description: string | null;
+  value_title: string | null;
+  value_subtitle: string | null;
+  about_paragraph_1: string | null;
+  about_paragraph_2: string | null;
+  about_chips: string[];
+  quick_facts: LandingQuickFact[];
+  services_title: string | null;
+  service_cards: LandingServiceCard[];
+  how_title: string | null;
+  how_description: string | null;
+  how_steps: LandingHowStep[];
+  faq_title: string | null;
+  faq_items: LandingFaqItem[];
+  cta_title: string | null;
+  cta_subtitle: string | null;
+  cta_button: string | null;
+  cta_note: string | null;
+  footer_about: string | null;
+  footer_tagline: string | null;
+  footer_copyright: string | null;
+  footer_supervision: string | null;
+  updated_at: string | null;
+}
+
+/** PUT /landing: only the fields sent change; an explicit null restores the bundled copy. */
+export interface LandingSettingsPayload {
+  hero_kicker?: string | null;
+  hero_headline?: string | null;
+  hero_tab_headlines?: Partial<Record<LandingHeroTab, string | null>> | null;
+  hero_subtitle?: string | null;
+  hero_primary_cta?: string | null;
+  hero_secondary_cta?: string | null;
+  trust_facts?: string[] | null;
+  join_title?: string | null;
+  join_description?: string | null;
+  value_title?: string | null;
+  value_subtitle?: string | null;
+  about_paragraph_1?: string | null;
+  about_paragraph_2?: string | null;
+  about_chips?: string[] | null;
+  quick_facts?: LandingQuickFact[] | null;
+  services_title?: string | null;
+  service_cards?: LandingServiceCard[] | null;
+  how_title?: string | null;
+  how_description?: string | null;
+  how_steps?: LandingHowStep[] | null;
+  faq_title?: string | null;
+  faq_items?: LandingFaqItem[] | null;
+  cta_title?: string | null;
+  cta_subtitle?: string | null;
+  cta_button?: string | null;
+  cta_note?: string | null;
+  footer_about?: string | null;
+  footer_tagline?: string | null;
+  footer_copyright?: string | null;
+  footer_supervision?: string | null;
+}
+
 // ───────────────────────── Financial and contract policies (ADR-023) ─────────────────────────
 
 export type PolicyBasis = 'legacy' | 'policy';

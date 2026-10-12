@@ -31,6 +31,7 @@ import {
   Route as RouteIcon,
   ShoppingCart,
   Clapperboard,
+  Globe,
 } from 'lucide-react';
 import { api } from '../../api';
 import { useAuth } from '../../auth/authContext';
@@ -162,7 +163,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               { label: 'خطط التحول الرقمي', path: '/admin/roadmaps', icon: RouteIcon },
               { label: 'طلبات الخدمة والتفاوض', path: '/admin/requests', icon: Send },
               { label: 'الإعلانات والحملات الترويجية', path: '/admin/ads', icon: Megaphone },
-              { label: 'فيديو الواجهة الرئيسية', path: '/admin/hero-video', icon: Clapperboard }
+              { label: 'فيديو الواجهة الرئيسية', path: '/admin/hero-video', icon: Clapperboard },
+              { label: 'محتوى صفحة الهبوط', path: '/admin/landing', icon: Globe }
             ]
           },
           {

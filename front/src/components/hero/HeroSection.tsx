@@ -12,7 +12,8 @@ import { SlideTabs } from '../ui/slide-tabs';
 import type { SlideTabItem } from '../ui/slide-tabs';
 import { HeroAdsBanner } from './HeroAdsBanner';
 import { useApiQuery, type ApiQuery } from '../../hooks/useApiQuery';
-import { api, publicApiUrl, type PublicAnnouncement, type Role } from '../../api';
+import { api, publicApiUrl, type LandingHeroTab, type LandingSettings, type PublicAnnouncement, type Role } from '../../api';
+import { LANDING_DEFAULTS, pick } from '../../lib/landingDefaults';
 import { useAuth } from '../../auth/authContext';
 import heroCardSvg from '../../assets/jahiz-hero-card.svg';
 
@@ -34,7 +35,7 @@ const TABS: (SlideTabItem & { target: string })[] = [
   { id: 'results', label: 'النتائج', target: 'how' },
 ];
 
-export const HeroSection: React.FC<{ adsFeed?: ApiQuery<PublicAnnouncement[]> }> = ({ adsFeed }) => {
+export const HeroSection: React.FC<{ adsFeed?: ApiQuery<PublicAnnouncement[]>; content?: LandingSettings | null }> = ({ adsFeed, content }) => {
   const navigate = useNavigate();
   const { user, status } = useAuth();
   const reduced = useReducedMotion() === true;
@@ -44,7 +45,15 @@ export const HeroSection: React.FC<{ adsFeed?: ApiQuery<PublicAnnouncement[]> }>
   const isVisitor = !user && !resolving;
   const showPortal = (role: Role) => !resolving && (!user || user.role === role);
 
-  const headline = HEADLINE_BY_TAB[activeTab] ?? DEFAULT_HEADLINE;
+  const tabHeadlines = content?.hero_tab_headlines ?? {};
+  const rawTabHeadline = tabHeadlines[activeTab as LandingHeroTab];
+  const tabHeadline = rawTabHeadline != null && rawTabHeadline.trim() !== '' ? rawTabHeadline : null;
+  // A tab shows its own headline; the "home" tab falls back to the main headline.
+  const headline =
+    tabHeadline ??
+    (activeTab === 'home'
+      ? pick(content?.hero_headline, DEFAULT_HEADLINE)
+      : (HEADLINE_BY_TAB[activeTab] ?? DEFAULT_HEADLINE));
 
   // Admin-managed hero video (announcement placement `hero`): the first live one
   // carrying a video. Always a <video> frame: the admin video when published,
@@ -139,7 +148,7 @@ export const HeroSection: React.FC<{ adsFeed?: ApiQuery<PublicAnnouncement[]> }>
             transition={{ duration: reduced ? 0 : 0.45, ease: 'easeOut' }}
           >
             <p className="mt-5 text-sm font-extrabold tracking-tight text-white sm:text-base">
-              <span className="text-[#E67E00]">جَاهِزٌ</span> تطوّر مصنعك<span className="text-[#E67E00]">؟</span>
+              {pick(content?.hero_kicker, LANDING_DEFAULTS.heroKicker)}
             </p>
 
             <div className="mt-4 w-full max-w-xl">
@@ -163,8 +172,7 @@ export const HeroSection: React.FC<{ adsFeed?: ApiQuery<PublicAnnouncement[]> }>
             </div>
 
             <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-white/70 sm:text-base lg:text-lg">
-              المنصة الوطنية لربط المنشآت الصناعية بمقدّمو حلول الأتمتة والذكاء الاصطناعي، بإشراف وحوكمة معتمدة من{' '}
-              <strong className="font-bold text-[#E67E00]">مركز تحديث الصناعة (IMC)</strong>.
+              {pick(content?.hero_subtitle, LANDING_DEFAULTS.heroSubtitle)}
             </p>
 
             <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -173,14 +181,14 @@ export const HeroSection: React.FC<{ adsFeed?: ApiQuery<PublicAnnouncement[]> }>
                 onClick={() => navigate('/factory/assessment')}
                 className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-[#E67E00] px-6 py-3 text-sm font-bold text-white shadow-md shadow-black/10 transition-colors duration-200 hover:bg-[#d16b00] focus-visible:ring-2 focus-visible:ring-[#d16b00] focus-visible:ring-offset-2 focus-visible:outline-none sm:text-base"
               >
-                ابدأ تقييم مصنعك
+                {pick(content?.hero_primary_cta, LANDING_DEFAULTS.heroPrimaryCta)}
               </button>
               <button
                 type="button"
                 onClick={scrollToHow}
                 className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-white/35 bg-transparent px-6 py-3 text-sm font-bold text-white transition-colors duration-200 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0E3A75] focus-visible:outline-none sm:text-base"
               >
-                اكتشف كيف يعمل
+                {pick(content?.hero_secondary_cta, LANDING_DEFAULTS.heroSecondaryCta)}
               </button>
             </div>
           </motion.div>

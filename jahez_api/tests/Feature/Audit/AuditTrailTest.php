@@ -550,6 +550,16 @@ describe('profiles, reviews and evaluations', function () {
             ->and(AuditLog::query()->get()->toJson())->not->toContain('Changed text');
     });
 
+    it('records landing settings changes with field names only', function () {
+        Sanctum::actingAs(User::factory()->imcAdmin()->create());
+
+        $this->putJson(route('api.v1.landing.update'), ['hero_headline' => 'Secret headline', 'cta_note' => 'Secret note'])->assertOk();
+
+        expect(onlyAuditEntry(AuditEvent::LandingSettingsUpdated)->subject_type)->toBe('landing_setting')
+            ->and(onlyAuditEntry(AuditEvent::LandingSettingsUpdated)->metadata)->toEqual(['fields' => ['cta_note', 'hero_headline']])
+            ->and(AuditLog::query()->get()->toJson())->not->toContain('Secret headline');
+    });
+
     it('records an evaluation with its version and total, never the written notes', function () {
         $this->seed(ReferenceDataSeeder::class);
         config(['jahez.providers.evaluation.scale_max' => 5]);

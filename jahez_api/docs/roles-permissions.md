@@ -27,7 +27,7 @@ A database CHECK constraint enforces the organization link column. The DOC §7 I
 | `service_providers.approve` | Approve, reject or suspend a provider (P4, ADR-014); read the change-request queue and approve or reject legal change requests (ADR-019) |
 | `service_providers.evaluate` | Record and read DOC §6 provider evaluations (OQ-13 interim) |
 | `service_listings.review` | Approve, reject or suspend one service a provider lists (ADR-021), including its packages and prices (ADR-027). Only the provider's own members write its packages; IMC reviews them |
-| `announcements.manage` | Create, edit, publish, unpublish and delete draft landing-page announcements (ADR-022). Visitors read live ones without a token |
+| `announcements.manage` | Create, edit, publish, unpublish and delete draft landing-page announcements (ADR-022); edit the landing-page content and logo (ADR-029). Visitors read live ones and the content without a token |
 | `factories.approve` | Approve, reject, ask for corrections or suspend a factory account (ADR-021); never changes its readiness classification |
 | `imc_registered_numbers.manage` | Manage the IMC-registered factory numbers (the "الرقم المسجل لدى IMC" whitelist): list, add, rename, delete and bulk-import from Excel/CSV. A factory self-registration is accepted only for a number on this list (matched by the number only) |
 | `assessments.view_any` | Read any factory's readiness assessments and legacy manual classifications (ADR-018). `assessments.create` was removed with manual classification on 2026-10-03. Also the only permission that sees readiness scores (totals, ranges, pillar scores, points); everyone else sees the category and the level (ADR-026) |

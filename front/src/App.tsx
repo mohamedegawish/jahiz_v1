@@ -33,6 +33,7 @@ const AdminRequests = lazyPage(() => import('./pages/admin/AdminRequests'), 'Adm
 const ServicesManagement = lazyPage(() => import('./pages/admin/ServicesManagement'), 'ServicesManagement');
 const AdsManagement = lazyPage(() => import('./pages/admin/AdsManagement'), 'AdsManagement');
 const HeroVideoSettings = lazyPage(() => import('./pages/admin/HeroVideoSettings'), 'HeroVideoSettings');
+const LandingSettings = lazyPage(() => import('./pages/admin/LandingSettings'), 'LandingSettings');
 const ContractsManagement = lazyPage(() => import('./pages/admin/ContractsManagement'), 'ContractsManagement');
 const FinancialsReports = lazyPage(() => import('./pages/admin/FinancialsReports'), 'FinancialsReports');
 const UsersRoles = lazyPage(() => import('./pages/admin/UsersRoles'), 'UsersRoles');
@@ -115,6 +116,7 @@ export const App: React.FC = () => {
             <Route path="/admin/requests" element={<AdminRequests />} />
             <Route path="/admin/ads" element={<AdsManagement />} />
             <Route path="/admin/hero-video" element={<HeroVideoSettings />} />
+            <Route path="/admin/landing" element={<LandingSettings />} />
             <Route path="/admin/contracts" element={<ContractsManagement />} />
             <Route path="/admin/reports" element={<FinancialsReports />} />
             <Route path="/admin/financial-settings" element={<FinancialSettings />} />

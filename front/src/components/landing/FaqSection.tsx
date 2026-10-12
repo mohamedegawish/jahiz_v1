@@ -1,34 +1,14 @@
 ﻿import React from 'react';
 import { ChevronDown } from 'lucide-react';
+import type { LandingFaqItem } from '../../api/types';
+import { LANDING_DEFAULTS, pick, pickList } from '../../lib/landingDefaults';
 
-const faqItems: { question: string; answer: string }[] = [
-  {
-    question: 'ما هي منصة جَاهِز؟',
-    answer: 'منصة رقمية وطنية تربط المنشآت الصناعية بمقدّمو حلول التحول الرقمي والأتمتة والذكاء الاصطناعي.',
-  },
-  {
-    question: 'من يدير المنصة؟',
-    answer: 'تديرها وتراقبها مركز تحديث الصناعة (IMC) لضمان جودة الحلول وحماية حقوق الطرفين.',
-  },
-  {
-    question: 'ما هو تقييم الجاهزية الرقمية؟',
-    answer: 'استبيان بركائز متعددة يحدد فئة جاهزية مصنعك ويعرض خارطة طريق بخدمات مقترحة.',
-  },
-  {
-    question: 'كيف أسجّل مصنعًا؟',
-    answer: 'سجّل منشأتك الصناعية ثم تصلك رسالة لتعيين كلمة المرور واكمال ملفك في بوابتك.',
-  },
-  {
-    question: 'كيف يُعتمد مقدّم الخدمة؟',
-    answer: 'يراجعه مركز تحديث الصناعة وفق معايير الاعتماد المعتمدة قبل ظهوره للمصانع.',
-  },
-  {
-    question: 'هل العقود والفواتير داخل المنصة؟',
-    answer: 'نعم — تفاوض واتفاقيات موثّقة وفواتير تُفعَّل وفق السياسة المالية المعتمدة.',
-  },
-];
-
-export const FaqSection: React.FC = () => {
+/**
+ * The FAQ accordion. Items and title are admin-managed; anything unset falls
+ * back to the bundled copy.
+ */
+export const FaqSection: React.FC<{ items?: LandingFaqItem[] | null; title?: string | null }> = ({ items, title }) => {
+  const faqItems = pickList(items, LANDING_DEFAULTS.faqItems);
   return (
     <section
       id="faq"
@@ -37,12 +17,12 @@ export const FaqSection: React.FC = () => {
     >
       <div className="flex items-center gap-2 mb-4">
         <span className="w-8 h-1 rounded-full bg-[#E67E00]" />
-        <h2
-          id="faq-title"
-          className="text-lg sm:text-xl font-extrabold text-[#172033] tracking-tight"
-        >
-          الأسئلة الشائعة
-        </h2>
+          <h2
+            id="faq-title"
+            className="text-lg sm:text-xl font-extrabold text-[#172033] tracking-tight"
+          >
+            {pick(title, LANDING_DEFAULTS.faqTitle)}
+          </h2>
       </div>
 
       <div className="space-y-3">

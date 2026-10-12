@@ -356,6 +356,15 @@ Each answer of a stored assessment carries `question_text_ar`, `choice_label_ar`
 | `PATCH /cart/items/{id}`, `DELETE /cart/items/{id}`, `DELETE /cart` | the cart's owner | change the choice (200 with the cart; PATCH also 409 while not approved) / remove (204) / empty (204); another account's item 404 |
 | `POST /cart/checkout` | factory members | `{requests: [{service, title, need, requirements?}]}` (services distinct, each in the cart); 201 with one service request per service, threads carrying `selection`; all or nothing; 422 when a provider in the cart is no longer eligible or the service is not in the cart, 409 when the factory may not send requests |
 
+## Landing content (ADR-029)
+
+| Method and path | Who | Notes |
+| --- | --- | --- |
+| `GET /public/landing` | anyone, no token | the single settings row (same shape for everyone); a null field or empty list means the web client shows its bundled copy |
+| `GET /public/landing/logo` | anyone, no token | the uploaded platform logo inline; 404 when none was uploaded |
+| `PUT /landing` | IMC (`announcements.manage`) | only the fields sent change; an explicit null restores the bundled copy; a no-op writes nothing (no audit entry); changes are audited by field names only |
+| `POST /landing/logo`, `DELETE /landing/logo` | IMC | multipart `file` (jpg, png, webp — no SVG — logo size limit); replaces the previous file; deleting restores the bundled mark |
+
 ## Financial and contract policies (ADR-023)
 
 All need `financial_policies.view` (IMC administrators); members get 403 on lists and 404 on records. Values are validated per kind; percentages and amounts are decimal **strings**. The client never sends a status, a calculated amount or an approval.

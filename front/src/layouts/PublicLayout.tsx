@@ -5,6 +5,7 @@ import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { RouteFallback } from '../components/ui/RouteFallback';
 import { api, publicApiUrl } from '../api';
 import { useApiQuery } from '../hooks/useApiQuery';
+import { LANDING_DEFAULTS, logoSrc, pick } from '../lib/landingDefaults';
 
 /** Footer placement: the second (bigger) admin-uploaded video announcement above the footer columns (hidden when none). */
 const FooterAdVideo: React.FC = () => {
@@ -42,8 +43,14 @@ const FooterAdVideo: React.FC = () => {
 /**
  * Layout of the public marketing pages (the landing page and advertisements). It has no
  * sidebar and needs no session; the portals use AppLayout behind RequireAuth.
+ *
+ * The logo and footer copy are admin-managed (GET /public/landing); anything unset
+ * falls back to the bundled copy, so the layout never depends on the API.
  */
-export const PublicLayout: React.FC = () => (
+export const PublicLayout: React.FC = () => {
+  const content = useApiQuery((signal) => api.landing.publicContent(signal), []);
+  const settings = content.data ?? null;
+  return (
   <div className="min-h-screen bg-[#F7F9FC] flex flex-col text-right" dir="rtl">
     <a
       href="#main-content"
@@ -51,7 +58,7 @@ export const PublicLayout: React.FC = () => (
     >
       تخطَّ إلى المحتوى
     </a>
-    <PublicHeader />
+    <PublicHeader logoUrl={logoSrc(settings, publicApiUrl)} />
     <main id="main-content" className="flex-1 w-full">
       <ErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
@@ -64,12 +71,12 @@ export const PublicLayout: React.FC = () => (
         <FooterAdVideo />
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-10">
           <div className="col-span-2">
-            <img src="/jahiz-logo-vector.svg" alt="جَاهِز" className="h-10 w-auto object-contain" />
+            <img src={logoSrc(settings, publicApiUrl)} alt="جَاهِز" className="h-10 w-auto object-contain" />
             <p className="mt-4 max-w-sm text-xs leading-relaxed text-[#667085]">
-              المنصة الوطنية لربط المنشآت الصناعية بمقدّمو حلول الأتمتة والذكاء الاصطناعي.
+              {pick(settings?.footer_about, LANDING_DEFAULTS.footerAbout)}
             </p>
             <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#FFEDD5] px-3 py-1 text-[11px] font-black text-[#002E4A]">
-              جَاهِز تطوّر مصنعك؟
+              {pick(settings?.footer_tagline, LANDING_DEFAULTS.footerTagline)}
             </p>
           </div>
           <nav aria-label="البوابات">
@@ -90,11 +97,12 @@ export const PublicLayout: React.FC = () => (
           </nav>
         </div>
         <div className="mt-8 flex flex-col items-center justify-between gap-3 border-t border-[#E6EAF0] pt-5 sm:flex-row">
-          <p className="text-[11px] text-[#98A2B3]">منصة جَاهِز — جميع الحقوق محفوظة.</p>
-          <p className="text-[11px] text-[#98A2B3]">بإشراف مركز تحديث الصناعة (IMC)</p>
+          <p className="text-[11px] text-[#98A2B3]">{pick(settings?.footer_copyright, LANDING_DEFAULTS.footerCopyright)}</p>
+          <p className="text-[11px] text-[#98A2B3]">{pick(settings?.footer_supervision, LANDING_DEFAULTS.footerSupervision)}</p>
         </div>
       </div>
     </footer>
   </div>
-);
+  );
+};
 

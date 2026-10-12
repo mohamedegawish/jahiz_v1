@@ -31,19 +31,21 @@ import { HomeVideos } from '../../components/landing/HomeVideos';
 import { useAuth } from '../../auth/authContext';
 import { api } from '../../api';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useLandingSettings } from '../../hooks/useLandingSettings';
 import { Reveal } from '../../components/ui/Reveal';
+import { LANDING_DEFAULTS, pick, pickList } from '../../lib/landingDefaults';
 
 /** Slim trust bar directly under the hero (trust signals live here, never inside the hero). */
-const TrustBar: React.FC = () => {
-  const facts = [
-    { icon: ShieldCheck, label: 'حوكمة IMC المعتمدة', color: 'text-[#1D7E4C]' },
-    { icon: Layers, label: 'كتالوج معتمد في 7 تصنيفات', color: 'text-[#003a75]' },
-    { icon: FileCheck, label: 'تقييم الجاهزية الرقمية للمصنع', color: 'text-[#002E4A]' },
+const TrustBar: React.FC<{ facts: string[] }> = ({ facts }) => {
+  const items = [
+    { icon: ShieldCheck, label: facts[0], color: 'text-[#1D7E4C]' },
+    { icon: Layers, label: facts[1], color: 'text-[#003a75]' },
+    { icon: FileCheck, label: facts[2], color: 'text-[#002E4A]' },
   ];
   return (
     <div className="border-b border-[#E6EAF0] bg-white">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-8 gap-y-2 px-4 py-3 sm:px-6 lg:px-8">
-        {facts.map((fact, i) => (
+        {items.map((fact, i) => (
           <span key={i} className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#344054] sm:text-xs">
             <fact.icon aria-hidden="true" className={`h-4 w-4 ${fact.color}`} />
             {fact.label}
@@ -101,12 +103,29 @@ const PlatformCard: React.FC<PlatformCardProps> = ({ num, icon: Icon, title, des
   </div>
 );
 
+/** Fixed visuals and destinations of the admin-editable service cards (position i shows icon/routes[i]). */
+const SERVICE_CARD_ICONS = [Gauge, Compass, MessageSquareText, FileSignature];
+const SERVICE_CARD_ROUTES = ['/factory/assessment', '/factory/catalog', '/factory/negotiations', '/factory/contracts'];
+
+/** Fixed visuals of the admin-editable usage steps; destinations stay with the step position. */
+const STEP_ICONS = [UserPlus, Gauge, Search, Rocket];
+const STEP_ROUTES = ['/register/factory', '/factory/assessment', '/factory/catalog', '/login'];
+
 export const LandingHome: React.FC = () => {
   const navigate = useNavigate();
   const { user, status } = useAuth();
   const isVisitor = !user && status !== 'loading';
   const topFeed = useApiQuery((signal) => api.announcements.publicList('top', signal), []);
   const bottomFeed = useApiQuery((signal) => api.announcements.publicList('bottom', signal), []);
+  // Admin-managed copy (logo, hero texts, section texts, FAQ); every use below
+  // falls back to the bundled copy, so the page never depends on the API.
+  const content = useLandingSettings();
+  const trustFacts = pickList(content?.trust_facts, LANDING_DEFAULTS.trustFacts);
+  const serviceCards = pickList(content?.service_cards, LANDING_DEFAULTS.serviceCards);
+  const howSteps = pickList(content?.how_steps, LANDING_DEFAULTS.howSteps);
+  const aboutChips = pickList(content?.about_chips, LANDING_DEFAULTS.aboutChips).slice(0, 3);
+  const quickFacts = pickList(content?.quick_facts, LANDING_DEFAULTS.quickFacts).slice(0, 3);
+  const chipIcons = [ShieldCheck, Handshake, LineChart];
 
   const categories = [
     { title: 'ERP & Applications', desc: 'تخطيط الموارد والإنتاج السحابي MRP', icon: Cpu },
@@ -121,8 +140,8 @@ export const LandingHome: React.FC = () => {
   return (
     <div className="animate-in fade-in duration-300">
       {/* 1. Main Hero Section with ShaderGradient */}
-      <HeroSection adsFeed={topFeed} />
-      <TrustBar />
+      <HeroSection adsFeed={topFeed} content={content} />
+      <TrustBar facts={[trustFacts[0] ?? LANDING_DEFAULTS.trustFacts[0], trustFacts[1] ?? LANDING_DEFAULTS.trustFacts[1], trustFacts[2] ?? LANDING_DEFAULTS.trustFacts[2]]} />
 
       <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-10 mt-10 pb-12">
         {/* 1c. Join the platform: the two registration paths and sign-in (visitors only) */}
@@ -131,10 +150,9 @@ export const LandingHome: React.FC = () => {
           <section aria-labelledby="join-title" className="jahez-card p-6 sm:p-8">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               <div className="space-y-1.5 max-w-xl">
-                <h2 id="join-title" className="text-lg sm:text-xl font-extrabold text-[#172033] tracking-tight">انضم إلى منظومة جَاهِز</h2>
+                <h2 id="join-title" className="text-lg sm:text-xl font-extrabold text-[#172033] tracking-tight">{pick(content?.join_title, LANDING_DEFAULTS.joinTitle)}</h2>
                 <p className="text-xs sm:text-sm text-[#667085] leading-relaxed">
-                  سجّل منشأتك أو شركتك مباشرة ببريدك وكلمة مرور تختارها، ثم سجّل الدخول فورًا وأكمل ملفك من بوابتك.
-                  يظهر مقدّم الخدمة للمصانع بعد اعتماده من مركز تحديث الصناعة.
+                  {pick(content?.join_description, LANDING_DEFAULTS.joinDescription)}
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:min-w-[520px]">
@@ -174,10 +192,10 @@ export const LandingHome: React.FC = () => {
         {/* 2. Platform Value Proposition */}
         <div className="text-center space-y-2 max-w-2xl mx-auto">
           <h2 className="text-2xl sm:text-3xl font-extrabold text-[#172033] tracking-tight">
-            منظومة متكاملة لتمكين الصناعة الوطنية
+            {pick(content?.value_title, LANDING_DEFAULTS.valueTitle)}
           </h2>
           <p className="text-xs sm:text-sm text-[#667085] leading-relaxed">
-            حلول تكنولوجية موثوقة مصممة خصيصاً لمصانع الأغذية، النسيج، الكيماويات، والصناعات الهندسية.
+            {pick(content?.value_subtitle, LANDING_DEFAULTS.valueSubtitle)}
           </p>
         </div>
 
@@ -216,41 +234,27 @@ export const LandingHome: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-3 text-xs sm:text-sm text-[#667085] leading-relaxed">
-                <p>
-                  <strong className="text-[#172033]">جَاهِز (JAHEZ)</strong> هي المنصة الوطنية الرقمية التي تربط المنشآت
-                  الصناعية بمقدّمو حلول التحول الرقمي والأتمتة والذكاء الاصطناعي، ضمن منظومة موحّدة تديرها وتراقبها
-                  <strong className="text-[#002E4A]"> مركز تحديث الصناعة (IMC)</strong> لضمان جودة الحلول وحماية حقوق
-                  الطرفين.
-                </p>
-                <p>
-                  تمنح المنصة المصانع طريقاً واضحاً للتحول من التصنيع التقليدي إلى المصنع الذكي (Industry 4.0) عبر تقييم
-                  الجاهزية، اختيار الحلول المعتمدة، التفاوض والتعاقد الرقمي، ومتابعة التنفيذ والفواتير — كلها في مكان واحد
-                  وبشفافية كاملة.
-                </p>
+                <p>{pick(content?.about_paragraph_1, LANDING_DEFAULTS.aboutParagraph1)}</p>
+                <p>{pick(content?.about_paragraph_2, LANDING_DEFAULTS.aboutParagraph2)}</p>
                 <div className="flex flex-wrap gap-2 pt-1">
-                  {[
-                    { icon: ShieldCheck, text: 'حوكمة رسمية من IMC' },
-                    { icon: Handshake, text: 'اتفاقيات موثّقة بعد قبول العرض' },
-                    { icon: LineChart, text: 'فواتير وسداد وفق السياسة المالية المعتمدة' },
-                  ].map((item, i) => (
-                    <span
-                      key={i}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FFEDD5] text-[#002E4A] text-[11px] font-bold"
-                    >
-                      <item.icon className="w-3.5 h-3.5" />
-                      {item.text}
-                    </span>
-                  ))}
+                  {aboutChips.map((chip, i) => {
+                    const ChipIcon = chipIcons[i % chipIcons.length];
+                    return (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FFEDD5] text-[#002E4A] text-[11px] font-bold"
+                      >
+                        <ChipIcon className="w-3.5 h-3.5" />
+                        {chip}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Quick facts sidebar */}
               <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
-                {[
-                  { value: '7', label: 'تصنيفات حلول صناعية معتمدة' },
-                  { value: '4', label: 'قطاعات صناعية مستهدفة' },
-                  { value: '3', label: 'بوابات: مصنع، مقدّم الخدمة، إدارة' },
-                ].map((fact, i) => (
+                {quickFacts.map((fact, i) => (
                   <div key={i} className="rounded-xl bg-[#F7F9FC] border border-[#E6EAF0] p-4 text-center">
                     <span className="text-2xl font-black text-[#002E4A] block">{fact.value}</span>
                     <p className="text-[11px] text-[#667085] font-semibold mt-1 leading-snug">{fact.label}</p>
@@ -264,47 +268,18 @@ export const LandingHome: React.FC = () => {
           <div id="services" className="scroll-mt-24">
             <div className="flex items-center gap-2 mb-4">
               <span className="w-8 h-1 rounded-full bg-[#004A93]" />
-              <h2 className="text-lg sm:text-xl font-extrabold text-[#172033] tracking-tight">خدمات المنصة</h2>
+              <h2 className="text-lg sm:text-xl font-extrabold text-[#172033] tracking-tight">{pick(content?.services_title, LANDING_DEFAULTS.servicesTitle)}</h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                {
-                  icon: Gauge,
-                  title: 'تقييم الجاهزية الرقمية',
-                  desc: 'استبيان بركائز متعددة يحدد فئة جاهزية مصنعك ويعرض خارطة طريق وخدمات مقترحة من الكتالوج.',
-                  meta: 'استبيان الجاهزية',
-                  to: '/factory/assessment',
-                },
-                {
-                  icon: Compass,
-                  title: 'كتالوج وسوق الحلول',
-                  desc: 'تصفح خدمات الكتالوج المعتمدة الموزعة على 7 تصنيفات: ERP، الأتمتة، السحابة، الأمن الصناعي، الذكاء الاصطناعي والهندسة الرقمية.',
-                  meta: '7 تصنيفات معتمدة',
-                  to: '/factory/catalog',
-                },
-                {
-                  icon: MessageSquareText,
-                  title: 'تفاوض وإرسال عروض',
-                  desc: 'مساحة تفاوض مباشرة بين المصنع ومقدّم الخدمة مع رسائل وعروض بأسعار ومدد محددة داخل المنصة.',
-                  meta: 'عروض ورسائل مباشرة',
-                  to: '/factory/negotiations',
-                },
-                {
-                  icon: FileSignature,
-                  title: 'اتفاقيات وعقود ومدفوعات',
-                  desc: 'اتفاقية موثّقة عند قبول العرض ومسودات عقود بمتطلبات نقل المعرفة، وفواتير ومدفوعات تُفعَّل وفق السياسة المالية المعتمدة.',
-                  meta: 'عقود ومدفوعات',
-                  to: '/factory/contracts',
-                },
-              ].map((svc, idx) => (
+              {serviceCards.slice(0, 4).map((svc, idx) => (
                 <Reveal key={idx} delay={Math.min(idx * 0.06, 0.24)}>
                 <PlatformCard
                   num={idx + 1}
-                  icon={svc.icon}
+                  icon={SERVICE_CARD_ICONS[idx % SERVICE_CARD_ICONS.length]}
                   title={svc.title}
-                  desc={svc.desc}
-                  meta={svc.meta}
-                  onClick={() => navigate(svc.to)}
+                  desc={svc.description}
+                  meta={svc.meta ?? undefined}
+                  onClick={() => navigate(SERVICE_CARD_ROUTES[idx % SERVICE_CARD_ROUTES.length])}
                 />
                 </Reveal>
               ))}
@@ -322,51 +297,22 @@ export const LandingHome: React.FC = () => {
           <div id="how" className="jahez-card p-6 sm:p-8 scroll-mt-24">
             <div className="flex items-center gap-2 mb-2">
               <span className="w-8 h-1 rounded-full bg-[#35B779]" />
-              <h2 className="text-lg sm:text-xl font-extrabold text-[#172033] tracking-tight">كيفية الاستخدام</h2>
+              <h2 className="text-lg sm:text-xl font-extrabold text-[#172033] tracking-tight">{pick(content?.how_title, LANDING_DEFAULTS.howTitle)}</h2>
             </div>
             <p className="text-xs sm:text-sm text-[#667085] mb-6">
-              أربع خطوات تفصلك من التسجيل حتى تشغيل أول مشروع تحول رقمي داخل مصنعك.
+              {pick(content?.how_description, LANDING_DEFAULTS.howDescription)}
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                {
-                  icon: UserPlus,
-                  title: 'سجّل حسابك',
-                  desc: 'سجّل منشأتك الصناعية أو شركتك كمقدّم خدمة بكلمة مرور تختارها، وادخل إلى بوابتك مباشرة.',
-                  cta: 'ابدأ التسجيل',
-                  onClick: () => navigate('/register/factory'),
-                },
-                {
-                  icon: Gauge,
-                  title: 'قيّم جاهزيتك',
-                  desc: 'أكمل استبيان الجاهزية الرقمية واحصل على نتيجة محسوبة من الخادم بفئة جاهزية مصنعك.',
-                  cta: 'ابدأ التقييم',
-                  onClick: () => navigate('/factory/assessment'),
-                },
-                {
-                  icon: Search,
-                  title: 'اختر حلك المناسب',
-                  desc: 'تصفح كتالوج الخدمات المعتمدة، قارن العروض، وأرسل طلبك للمقدّم الخدمة المناسب.',
-                  cta: 'افتح الكتالوج',
-                  onClick: () => navigate('/factory/catalog'),
-                },
-                {
-                  icon: Rocket,
-                  title: 'تفاوض وتعاقد',
-                  desc: 'تفاوض مع مقدّم الخدمة، وثّق الاتفاق وأعدّ مسودة العقد، وتابع الفواتير من لوحتك.',
-                  cta: 'سجّل الدخول',
-                  onClick: () => navigate('/login'),
-                },
-              ].map((step, idx) => (
+              {howSteps.slice(0, 4).map((step, idx) => (
                 <Reveal key={idx} delay={Math.min(idx * 0.06, 0.24)}>
                 <PlatformCard
                   num={idx + 1}
-                  icon={step.icon}
+                  icon={STEP_ICONS[idx % STEP_ICONS.length]}
                   title={step.title}
-                  desc={step.desc}
-                  meta={step.cta}
-                  onClick={step.onClick}
+                  desc={step.description}
+                  meta={step.cta ?? undefined}
+                  onClick={() => navigate(STEP_ROUTES[idx % STEP_ROUTES.length])}
                 />
                 </Reveal>
               ))}
@@ -376,11 +322,11 @@ export const LandingHome: React.FC = () => {
         </div>
 
         {/* 6. FAQ — native details/summary accordion */}
-        <FaqSection />
+        <FaqSection items={content?.faq_items} title={content?.faq_title} />
       </div>
 
       {/* 7. Final conversion banner — full-width closer */}
-      <FinalCTA />
+      <FinalCTA content={content} />
     </div>
   );
 };

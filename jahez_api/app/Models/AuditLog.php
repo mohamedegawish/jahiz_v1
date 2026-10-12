@@ -42,6 +42,7 @@ class AuditLog extends Model
         ReadinessQuestionnaire::class => 'readiness_questionnaire',
         ServicePromotion::class => 'service_promotion',
         PublicAnnouncement::class => 'public_announcement',
+        LandingSetting::class => 'landing_setting',
         FinancialPolicy::class => 'financial_policy',
         FinancialPolicyVersion::class => 'financial_policy_version',
         CatalogService::class => 'catalog_service',
@@ -82,7 +83,7 @@ class AuditLog extends Model
      *
      * @param  array<string, mixed>  $metadata
      */
-    public static function record(AuditEvent $event, ?User $actor = null, User|Factory|ServiceProvider|ServiceRequest|ProviderRequest|Agreement|Contract|Invoice|Payment|ReadinessQuestionnaire|ServicePromotion|PublicAnnouncement|FinancialPolicy|FinancialPolicyVersion|CatalogService|TransformationPlan|CategorySuggestion|ImcRegisteredNumber|null $subject = null, array $metadata = [], ?string $ipAddress = null): self
+    public static function record(AuditEvent $event, ?User $actor = null, User|Factory|ServiceProvider|ServiceRequest|ProviderRequest|Agreement|Contract|Invoice|Payment|ReadinessQuestionnaire|ServicePromotion|PublicAnnouncement|LandingSetting|FinancialPolicy|FinancialPolicyVersion|CatalogService|TransformationPlan|CategorySuggestion|ImcRegisteredNumber|null $subject = null, array $metadata = [], ?string $ipAddress = null): self
     {
         $entry = new self;
         $entry->event = $event;

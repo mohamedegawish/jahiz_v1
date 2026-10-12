@@ -103,6 +103,8 @@ import type {
   ServiceRequestCreatePayload,
   CategorySuggestion,
   CategorySuggestionPayload,
+  LandingSettings,
+  LandingSettingsPayload,
   User,
   UserCreatePayload,
   UserUpdatePayload,
@@ -285,6 +287,21 @@ export function createEndpoints(client: Pick<ApiClient, 'request'>) {
       removeVideo: (id: number) => data(send<DataEnvelope<AdminAnnouncement>>('DELETE', `/announcements/${id}/video`)),
       /** A draft's video for the admin preview, read with the session token. */
       video: (videoPath: string, signal?: AbortSignal) => file(videoPath, signal),
+    },
+
+    /** Landing-page content (logo, hero texts, section texts, FAQ). `publicContent` needs no session and never triggers 401 handling. The shape is the same for visitors and administrators, so the admin page reads it too. */
+    landing: {
+      publicContent: (signal?: AbortSignal) =>
+        data(send<DataEnvelope<LandingSettings>>('GET', '/public/landing', { signal, auth: false })),
+      /** Only the fields sent change; an explicit null restores the bundled copy. */
+      update: (payload: LandingSettingsPayload) =>
+        data(send<DataEnvelope<LandingSettings>>('PUT', '/landing', { body: payload })),
+      uploadLogo: (upload: File) => {
+        const form = new FormData();
+        form.append('file', upload);
+        return data(send<DataEnvelope<LandingSettings>>('POST', '/landing/logo', { body: form }));
+      },
+      removeLogo: () => data(send<DataEnvelope<LandingSettings>>('DELETE', '/landing/logo')),
     },
 
     /** IMC: the size of every review queue (providers, factories, listings, change requests) in one call. */

@@ -24,8 +24,10 @@ const scrollBehavior = (): ScrollBehavior =>
  * Header of the public marketing pages. It never shows the portal navigation: a signed-in
  * visitor gets one button to their own portal instead. The section links are pure in-page
  * anchors, so they stay visible for every visitor, signed-in included.
+ *
+ * `logoUrl` is the admin-uploaded platform logo; the bundled mark is the fallback.
  */
-export const PublicHeader: React.FC = () => {
+export const PublicHeader: React.FC<{ logoUrl?: string | null }> = ({ logoUrl }) => {
   const { user, status } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -97,7 +99,7 @@ export const PublicHeader: React.FC = () => {
             className="h-10 sm:h-12 w-auto object-contain shrink-0 rounded-lg bg-white/95 px-2 py-1 shadow-sm"
           />
           <NavLink to="/" className="min-w-0" aria-label="جَاهِز - الصفحة الرئيسية">
-            <img src="/jahiz-logo-vector.svg" alt="جَاهِز" className="h-12 w-auto object-contain sm:h-14" />
+            <img src={logoUrl ?? '/jahiz-logo-vector.svg'} alt="جَاهِز" className="h-12 w-auto object-contain sm:h-14" />
           </NavLink>
         </div>
 

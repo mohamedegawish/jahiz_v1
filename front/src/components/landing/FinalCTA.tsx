@@ -2,8 +2,11 @@
 import { useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import designSvg from '../../assets/design.svg';
+import { publicApiUrl, type LandingSettings } from '../../api';
+import { LANDING_DEFAULTS, logoSrc, pick } from '../../lib/landingDefaults';
 
-export const FinalCTA: React.FC = () => {
+/** The closing conversion banner. Texts and logo are admin-managed with bundled fallbacks. */
+export const FinalCTA: React.FC<{ content?: LandingSettings | null }> = ({ content }) => {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
 
@@ -79,7 +82,7 @@ export const FinalCTA: React.FC = () => {
       >
         {/* Logo — right side (RTL first) */}
         <img
-          src="/jahiz-logo-vector.svg"
+          src={logoSrc(content, publicApiUrl)}
           alt="جَاهِز"
           className="h-24 w-auto shrink-0 self-center object-contain sm:h-36 sm:-translate-y-10 sm:translate-x-6 lg:h-44 lg:-translate-y-20 lg:translate-x-10"
         />
@@ -87,11 +90,11 @@ export const FinalCTA: React.FC = () => {
         {/* Text — middle */}
         <div className="flex flex-col items-center justify-center text-center sm:flex-1 sm:translate-x-8 sm:px-4 lg:translate-x-14">
           <h2 className="text-2xl font-black text-white sm:text-3xl lg:text-4xl">
-            هل مصنعك جَاهِز للمستقبل؟
+            {pick(content?.cta_title, LANDING_DEFAULTS.ctaTitle)}
           </h2>
 
           <p className="mt-3 text-sm text-white/75 sm:text-base">
-            ابدأ رحلة التحول الرقمي اليوم.
+            {pick(content?.cta_subtitle, LANDING_DEFAULTS.ctaSubtitle)}
           </p>
 
           <button
@@ -99,11 +102,11 @@ export const FinalCTA: React.FC = () => {
             onClick={() => navigate('/factory/assessment')}
             className="mt-6 cursor-pointer rounded-2xl bg-[#E67E00] px-8 py-3.5 text-sm font-bold text-white shadow-lg shadow-black/25 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#E85B00] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:text-base"
           >
-            ابدأ تقييم مصنعك
+            {pick(content?.cta_button, LANDING_DEFAULTS.ctaButton)}
           </button>
 
           <p className="mt-3 text-xs text-white/60">
-            يستغرق التقييم بضع دقائق فقط
+            {pick(content?.cta_note, LANDING_DEFAULTS.ctaNote)}
           </p>
         </div>
 

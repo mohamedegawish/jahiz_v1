@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\ImcRegisteredNumberController;
 use App\Http\Controllers\Api\V1\InvoiceController;
 use App\Http\Controllers\Api\V1\InvoiceLineController;
+use App\Http\Controllers\Api\V1\LandingSettingController;
 use App\Http\Controllers\Api\V1\ManualPaymentController;
 use App\Http\Controllers\Api\V1\MarketplaceReportController;
 use App\Http\Controllers\Api\V1\NegotiationMessageController;
@@ -110,6 +111,11 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('announcements/{publicAnnouncement}/video', [PublicAnnouncementController::class, 'publicVideo'])
             ->whereNumber('publicAnnouncement')
             ->name('announcements.video');
+        // Landing-page content (logo, hero texts, section texts, FAQ): the same
+        // shape for everyone, without a token. Unset fields fall back to the web
+        // client's bundled copy.
+        Route::get('landing', [LandingSettingController::class, 'show'])->name('landing.show');
+        Route::get('landing/logo', [LandingSettingController::class, 'logo'])->name('landing.logo');
     });
 
     // Payment gateway callbacks: public, verified by the gateway adapter (ADR-017).
@@ -455,6 +461,11 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('announcements/{publicAnnouncement}/video', [PublicAnnouncementController::class, 'video'])->whereNumber('publicAnnouncement')->name('announcements.video');
         Route::post('announcements/{publicAnnouncement}/video', [PublicAnnouncementController::class, 'storeVideo'])->whereNumber('publicAnnouncement')->name('announcements.video.store');
         Route::delete('announcements/{publicAnnouncement}/video', [PublicAnnouncementController::class, 'destroyVideo'])->whereNumber('publicAnnouncement')->name('announcements.video.destroy');
+
+        // Landing-page content (ADR-022), IMC administration.
+        Route::put('landing', [LandingSettingController::class, 'update'])->name('landing.update');
+        Route::post('landing/logo', [LandingSettingController::class, 'storeLogo'])->name('landing.logo.store');
+        Route::delete('landing/logo', [LandingSettingController::class, 'destroyLogo'])->name('landing.logo.destroy');
 
         // Provider-suggested categories: providers propose, IMC approves/rejects (never creates catalog rows).
         Route::get('category-suggestions', [CategorySuggestionController::class, 'index'])->name('category-suggestions.index');
