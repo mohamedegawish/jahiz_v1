@@ -63,8 +63,11 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('api', function (Request $request): Limit {
             $user = $request->user();
 
-            return Limit::perMinute(Config::integer('api.rate_limit_per_minute'))
-                ->by($user !== null ? 'user:'.$user->getAuthIdentifier() : 'ip:'.$request->ip());
+            // Signed-in accounts: their own, higher limit, since the web client alone makes
+            // about 70 calls a minute when moving quickly between pages (finding PA-35).
+            return $user !== null
+                ? Limit::perMinute(Config::integer('api.user_rate_limit_per_minute'))->by('user:'.$user->getAuthIdentifier())
+                : Limit::perMinute(Config::integer('api.rate_limit_per_minute'))->by('ip:'.$request->ip());
         });
 
         RateLimiter::for('password-reset', fn (Request $request): Limit => Limit::perMinute(5)->by('ip:'.$request->ip()));

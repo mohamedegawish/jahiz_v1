@@ -220,7 +220,8 @@ describe('public media (production audit)', function () {
             ->assertHeader('Accept-Ranges', 'bytes')
             ->assertHeader('Content-Range', 'bytes 0-99/4096')
             ->assertHeader('Content-Length', '100')
-            ->assertHeader('Content-Type', 'video/mp4');
+            // The type detected from the bytes at upload, never the file name's.
+            ->assertHeader('Content-Type', PublicAnnouncement::query()->findOrFail($id)->video_mime_type);
     });
 
     // PA-21: the public media is the same for every visitor; it may be kept briefly.

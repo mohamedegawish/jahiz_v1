@@ -102,7 +102,7 @@ Validation example:
 
 ## 6. Rate limiting (in force)
 
-- The default limiter (`api`) allows `API_RATE_LIMIT_PER_MINUTE` requests per minute (default **60**), keyed by the authenticated user, or by client IP for guests. This number is a **provisional technical default**, not a measured capacity.
+- The default limiter (`api`) allows a signed-in account `API_USER_RATE_LIMIT_PER_MINUTE` requests per minute (default **180**), keyed by the account, and a guest `API_RATE_LIMIT_PER_MINUTE` (default **60**), keyed by client IP. Both are **provisional technical defaults**, not measured capacities. The account limit was raised from 60 after the production audit measured the web client itself making 72 calls in one minute while an administrator moved through about ten portal pages (each page loads its data, the notification count and the sidebar badges), so quick navigation showed 429 error states (finding PA-35).
 - The client IP comes from `X-Forwarded-For` **only** when the caller is listed in `TRUSTED_PROXIES`. Behind a load balancer, set `TRUSTED_PROXIES` to its addresses; otherwise every guest shares the proxy's IP and its limit. When it is empty (the default), forwarded headers are ignored, so clients cannot spoof them to dodge limits.
 - `GET /api/v1/health` is exempt, so monitoring probes cannot exhaust it.
 - **(in force since Phase 3)** Login: 5 failures per minute per email and IP, and 20 per 15 minutes per account. Forgot and reset password: 5 per minute per IP ([ADR-011](decisions/ADR-011-account-provisioning-and-credentials.md)). An email counts as the same account only when it equals the stored address apart from letter case.

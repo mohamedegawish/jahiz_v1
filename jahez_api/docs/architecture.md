@@ -29,7 +29,7 @@ A Laravel 12 application with the platform foundation (Phase 1), the reference d
 | Database | **MySQL** driver → local MariaDB 10.4.32; databases `jahez` (dev), `jahez_testing` (tests), `utf8mb4_unicode_ci` | `.env`, `phpunit.xml`, [ADR-004](decisions/ADR-004-database-mysql.md) |
 | Cache / queue / session | `database` drivers (no Redis). **A queue worker is required** for invitation and reset emails. | `.env`, README |
 | CORS | Published; origins from `CORS_ALLOWED_ORIGINS` (empty = none); exposes `X-Request-Id`, `Retry-After`, `X-RateLimit-*` | `config/cors.php` |
-| Rate limit | `api` limiter: `API_RATE_LIMIT_PER_MINUTE` (60) per user or guest IP; `negotiation-messages` (30 per minute per user) and `negotiation-offers` (10) | `AppServiceProvider`, `config/api.php` |
+| Rate limit | `api` limiter: `API_USER_RATE_LIMIT_PER_MINUTE` (180) per signed-in account, `API_RATE_LIMIT_PER_MINUTE` (60) per guest IP; `negotiation-messages` (30 per minute per user) and `negotiation-offers` (10) | `AppServiceProvider`, `config/api.php` |
 | Tests | Pest on MySQL, `LazilyRefreshDatabase`, global `Http::preventStrayRequests()` + `Sleep::fake()`; 823 tests (2572 assertions), run on both MariaDB 10.4 and MySQL 8.4, serial and parallel, including policy matrices and lock-sequence checks; k6 scripts in `tests/performance/` | `tests/`, [testing/strategy.md](testing/strategy.md) |
 | Static analysis | Larastan level 8, 0 errors, no excluded paths | `phpstan.neon` |
 | AI tooling | `.ai/guidelines/jahez.md` merged into the generated `AGENTS.md` | [ADR-007](decisions/ADR-007-agent-guidelines.md) |

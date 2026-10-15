@@ -137,7 +137,18 @@ All on the audit host (Windows 11, PHP 8.2.12 CLI, Node 26.7.0, no Docker), 2026
 | CSP substitution step of `front/Dockerfile`, simulated in Git Bash | Correct header, no placeholder left (an earlier draft also rewrote the file's own comment: fixed) |
 | CSP in a real browser: `vite preview` (production policy) + headless Chrome over the DevTools protocol, 8 pages (`/`, `/login`, `/register/factory`, `/register/provider`, `/forgot-password`, `/reset-password?…`, `/use-cases`, an unknown path) | Every page rendered; **no CSP violation**. Control: an injected inline script and a foreign image were blocked and reported (3 violations), so the detector works |
 | `run.ps1 -Status` | Works (the batch wrapper now maps `status` / `stop` to it) |
-| Full API suite with every new test (`php artisan test --compact`) | **PENDING: MySQL down at the time of writing** (see §8) |
+| New database tests against the **unmodified** code (git worktree of `main` @ `e3d373d`, own `vendor/`; MariaDB 10.4.32) | **40 failed, 121 passed**: every failure is a new or deliberately changed test, failing for the reason its finding states ([findings.md](../security/findings.md#production-audit-2026-10-15-branch-securityproduction-audit), baseline proof); every pre-existing test in those files passed |
+| First full run on the fixed code | 1527 passed, **2 failed**: both were assumptions in new tests (a synthetic mp4 is detected as `application/mp4`; the user factory creates a factory). Corrected to compare with the stored type and with the count before the request; the two files then passed (57 tests) |
+| Unique-IMC migration on a throwaway database (`jahez_pa_scratch_*`, created and dropped by the check) | **7/7**: refuses while two factories share a number (including `IMC-1` / `imc-1`) and names both; no index and no row changed; applies once resolved; then refuses a duplicate, still allows several NULLs, and rolls back |
+| Dev database `jahez` (read-only query) | 4 factories, 6 providers, **no shared IMC number**: the migration will apply there. Not migrated by the audit |
+| Fresh migrate + seed on a throwaway database (`jahez_pa_portal`) | All migrations, including the two new ones, and `ReferenceDataSeeder` + `LocalDemoSeeder`: OK |
+| Signed-in portals under the production CSP: `vite preview` + the API on the throwaway database (`php -S` from `public/`, checked to be serving that database) + headless Chrome, 3 roles, **40 pages** (20 administrator, 12 factory, 8 provider) | **0 CSP violations, 0 sign-outs**. Nine pages first rendered small: the API request log shows 57, 72 and 83 authenticated calls in consecutive minutes against a limit of 60 per account, so they were showing 429 states. Revisited after a pause they rendered fully (25–44 KB), still without violation. This led to finding **PA-35** |
+| `composer analyse` / `pint --test` on the whole tree (including the owner's uncommitted `CreateAdminUser` change) | No errors / passed |
+| Full API suite on the fixed code (MariaDB 10.4.32, Windows), after the two test corrections | **1529 passed, 0 failed** (6504 assertions, 796 s) |
+| PA-35 (found after that run): `RateLimitTest` before / after the fix; `composer analyse` | 1 failed (a signed-in user was cut off at the guest limit) / **5 passed**; no errors |
+| Signed-in portals again, fast navigation, after PA-35 | **40 pages, 0 CSP violations, 0 sign-outs, no page rendered small** (no more 429 states) |
+| Throwaway databases and servers | `jahez_pa_portal` dropped, the scratch servers stopped, the baseline worktree removed; the server is back to `jahez`, `jahez_postman_landing`, `jahez_testing` |
+| **CI on GitHub** (the owner pushed the branch, merged PR #1, then merged `main` back), read through the public API | 3 runs (`47f21b3`, `eae9d28`, `68ec74d`): **web client job passed, gitleaks passed, API job failed** at "Tests (MySQL 8.4)". The job log needs authentication, so the failing tests are not yet known. The first failing run is on the audit commit itself, so the failure may come from the audit or from code never run on MySQL 8.4 / Linux before (the last recorded MySQL 8.4 run is 2026-10-06). A scan for letter-case mismatches between class names and files found none |
 
 ## 5. Checked and found correct (no change)
 
@@ -195,8 +206,15 @@ All on the audit host (Windows 11, PHP 8.2.12 CLI, Node 26.7.0, no Docker), 2026
    - OQ-33 (password and lockout policy confirmation);
    - FC-16 (token prefix).
 8. **PHP 8.2 security support ends 2026-12-31:** plan PHP 8.3 (image and local), with a full suite run on it.
-9. **Portal pages under the CSP:** the CSP was verified on the public and authentication pages. Signed-in portal pages need a running API, as do the private-file previews (`blob:`) and the invoice print. Check them once on staging (`npx vite preview` against a staging API) before release.
+9. **The invoice print window under the CSP:** the 40 signed-in portal pages were verified, and private files are saved as downloads (not opened as `blob:` pages). The print window (now without an inline script) was not opened by the automated run: print one invoice once on staging.
 
 ## 8. Verdict
 
-Written after the full suite run; see the end of this log.
+Pending the cause of the CI failure on MySQL 8.4 (§4). The local evidence:
+- 1529/1529 tests on MariaDB;
+- Larastan clean;
+- web client lint, tests and build clean;
+- no dependency advisories;
+- CSP verified on 48 pages.
+
+The production database engine has not passed the suite since 2026-10-06.

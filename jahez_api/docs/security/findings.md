@@ -83,7 +83,7 @@ Method, feature checklist and every command with its result: [production audit l
 | PA-03 | **PHP upload limits were the image defaults (2 MB / 8 MB)** while the API accepts 5 MB documents, 20 MB videos and three documents per registration | High | Statically confirmed (no php.ini in the image) | Fixed | `docker/php.ini` (25 MB / 30 MB, `expose_php=Off`, opcache); the go-live gate warns when PHP's limits are below the largest upload | `CheckProductionConfigurationTest` › warns when the PHP upload limits are below… |
 | PA-04 | **The web client image silently targeted `http://localhost:8000`** when `FRONT_API_URL` was unset | High | Statically confirmed (`docker-compose.yml`) | Fixed | `FRONT_API_URL` is required (`:?`) and the frontend build stops without it | Compose structure check (log §4) |
 | PA-05 | **The go-live gate passed a placeholder `APP_KEY` and a CORS list without the web client's origin** (`.env.docker.example`'s placeholder passed "APP_KEY is set"; every browser call would be refused) | High | Reproduced (new gate tests failed on the old command) | Fixed | `APP_KEY` must be a base64 key of the cipher's length; the web client's origin must be in `CORS_ALLOWED_ORIGINS` unless it is the API's own | `CheckProductionConfigurationTest` › "placeholder app key", "app key of the wrong length", "web client origin missing from CORS", "another origin in CORS"; › passes a same-origin deployment… |
-| PA-06 | **Registration bypassed the password policy**: `min:8\|max:72` (characters) instead of `Password::defaults()` (12 characters, 72 bytes); a long Arabic password was silently cut by bcrypt | Medium | Statically confirmed; DB-dependent test written | Fixed | `Password::defaults()` in both registration requests; the web client checks the same rule | `RegistrationTest` › applies the platform password policy… (2); front `tests/password.test.ts` |
+| PA-06 | **Registration bypassed the password policy**: `min:8\|max:72` (characters) instead of `Password::defaults()` (12 characters, 72 bytes); a long Arabic password was silently cut by bcrypt | Medium | Reproduced (baseline run, below) | Fixed | `Password::defaults()` in both registration requests; the web client checks the same rule | `RegistrationTest` › applies the platform password policy… (2); front `tests/password.test.ts` |
 | PA-07 | **The web client trimmed the registration password but not the login password**, so a password with surrounding spaces could never sign in | Medium | Statically confirmed (`lib/forms.ts` `appendText`) | Fixed | Secrets are appended exactly as typed (`appendSecret`) | front `tests/password.test.ts`; `RegistrationTest` › keeps a password exactly as typed… |
 | PA-08 | **A self-registered email was marked verified without proof** (`email_verified_at = now()`) | Medium | Statically confirmed | Fixed (interim, [OQ-58](../open-questions.md#oq-58)) | Stays unverified until a reset link sent to it is used; administrators see `email_verified` | `RegistrationTest` › marks the email verified only once a reset link…; the two creation tests now expect null |
 | PA-09 | **Registration revealed existing emails by timing** (an existing email returned before bcrypt and storage) **and said "account created" when nothing was** | Medium | Statically confirmed | Fixed; residual accepted ([OQ-58](../open-questions.md#oq-58)) | The password is hashed before the branch; a neutral message in the API and the web client. Residual: "register, then sign in" remains an oracle while instant sign-in is kept, limited by `throttle:registration` | `RegistrationTest` › hashes the password even when the email already has an account |
@@ -112,3 +112,29 @@ Method, feature checklist and every command with its result: [production audit l
 | PA-32 | The IMC-number import wrote its audit entry outside the import's transaction (ADR-012) | Low | Statically confirmed | Fixed | One transaction | `ImcRegisteredNumberTest` › imports nothing when the audit entry cannot be written |
 | PA-33 | An unreadable workbook made the import answer 500 | Low | Statically confirmed | Fixed | 422 on `file` | `ImcRegisteredNumberTest` › answers 422 for a workbook it cannot read; › … without a worksheet |
 | PA-34 | Two registration tests asserted against `AccountInvitation::class` without importing it, so they checked a class that does not exist and always passed | Low (test quality) | Statically confirmed | Fixed | Import added; the assertions now check the real notification | `RegistrationTest` › direct password (2) |
+| PA-35 | **Quick navigation in the portals ran into the API rate limit**: one limit of 60 requests per minute was shared by guests and signed-in accounts, and the web client alone made 72 calls in one minute while an administrator moved through about ten pages (each loads its data, the notification count and the sidebar badges), so pages showed 429 error states. Compose did not pass the limit either. | Medium (functional) | Reproduced (signed-in portal run under the production CSP, API request log: 57, 72 and 83 calls in consecutive minutes; the pages rendered fully when revisited after a pause) | Fixed | Signed-in accounts get their own limit, `API_USER_RATE_LIMIT_PER_MINUTE` (180, per account); guests keep `API_RATE_LIMIT_PER_MINUTE` (60, per IP); both passed through Compose. Provisional technical defaults ([OQ-33](../open-questions.md#oq-33)) | `RateLimitTest` › gives signed-in accounts their own limit… |
+
+**Baseline proof of the database tests (2026-10-15).** The new and changed database tests were run against the unmodified code, in a git worktree of `main` @ `e3d373d` with its own `vendor/`: **40 failed, 121 passed**. Every failure was a new or deliberately changed test, and every pre-existing test in those files passed. The reasons for failing:
+- **PA-06:** 422 expected, the request was accepted.
+- **PA-08:** `email_verified_at` was set.
+- **PA-09:** `Hash::make` called 0 times for a known email.
+- **PA-10:** second registration accepted; duplicate inserted.
+- **PA-11:** no 429 after 20 checks.
+- **PA-12, PA-27:** route missing.
+- **PA-15:** the field was ignored.
+- **PA-21:** `no-store` on public media.
+- **PA-22:** the placement filter was refused.
+- **PA-26:** 200 instead of 206; 500 instead of 404 for a missing file.
+- **PA-30:** 422 instead of 404.
+- **PA-32:** a row committed without its audit entry.
+- **PA-33:** 500 instead of 422.
+
+These findings are therefore **reproduced**. Two cases are weaker:
+- PA-28's test failed on the old code only because its size constant did not exist there.
+- PA-07's server-side test passed on the old code, as expected: the trimming was in the web client.
+
+Two of the new tests first failed on the fixed code because of the tests' own assumptions:
+- the content type of a synthetic mp4 is `application/mp4`, not `video/mp4`;
+- the user factory creates a factory.
+
+Both were corrected to compare against the stored type and the count before the request. Their baseline failures show the same reasons as above.

@@ -537,6 +537,7 @@ describe('production audit hardening', function () {
     // PA-09: a known email returned before hashing, so it answered faster than a new one.
     it('hashes the password even when the email already has an account', function () {
         User::factory()->create(['email' => 'mona@nile-foods.example']);
+        $factoriesBefore = Factory::query()->count();
         Hash::spy();
 
         $this->post(route('api.v1.registration.factories'), factoryRegistration(), ['Accept' => 'application/json'])
@@ -544,7 +545,7 @@ describe('production audit hardening', function () {
             ->assertExactJson(['data' => ['message' => RegistrationController::RESPONSE_MESSAGE]]);
 
         Hash::shouldHaveReceived('make')->once();
-        expect(Factory::query()->count())->toBe(0);
+        expect(Factory::query()->count())->toBe($factoriesBefore);
     });
 
     // PA-10: the IMC number identifies one organization (docs/api-endpoints.md), but
