@@ -1,14 +1,16 @@
 # =============================================================================
 # run.ps1 - Jahez project launcher (API :8000 + queue worker + frontend :3000)
 # Usage:
-#   .\run.ps1            start everything (detached, survives this window)
+#   .\run.ps1            set up (dependencies, migrate, every seeder) then start everything
+#   .\run.ps1 -SkipSetup start without the setup step
 #   .\run.ps1 -Stop      stop everything this script started
 #   .\run.ps1 -Status    show status of DB / API / frontend
 # =============================================================================
 
 param(
     [switch]$Stop,
-    [switch]$Status
+    [switch]$Status,
+    [switch]$SkipSetup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -114,7 +116,29 @@ if (-not (Test-Port $DBPort)) {
     }
 } else { Write-Host "Database already up on :$DBPort" }
 
-# 2) Laravel API
+# 2) setup: dependencies on the first run, then the schema and every seeder. Each step is
+# idempotent, so it runs on every start. With APP_ENV=local, db:seed also creates the local
+# demo accounts, and DemoDataSeeder the full demo data set (ADR-024).
+function Invoke-Step([string]$Name, [string]$Dir, [scriptblock]$Command) {
+    Write-Host "setup: $Name ..."
+    Push-Location $Dir
+    try { & $Command } finally { Pop-Location }
+    if ($LASTEXITCODE -ne 0) { throw "setup step failed: $Name (exit $LASTEXITCODE)" }
+}
+
+if (-not $SkipSetup) {
+    if (-not (Test-Path (Join-Path $ApiDir 'vendor'))) {
+        Invoke-Step 'composer install' $ApiDir { & composer install --no-interaction }
+    }
+    if (-not (Test-Path (Join-Path $FrontDir 'node_modules'))) {
+        Invoke-Step 'npm install' $FrontDir { & npm install }
+    }
+    Invoke-Step 'migrate'             $ApiDir { & $PHP artisan migrate --force }
+    Invoke-Step 'seed reference data' $ApiDir { & $PHP artisan db:seed --force }
+    Invoke-Step 'seed demo data'      $ApiDir { & $PHP artisan db:seed --class=DemoDataSeeder --force }
+}
+
+# 3) Laravel API
 if (-not (Test-Port $ApiPort)) {
     Write-Host "starting API on :$ApiPort ..."
     Start-Process -FilePath $PHP -ArgumentList 'artisan','serve','--host=127.0.0.1',"--port=$ApiPort" `
@@ -125,7 +149,7 @@ if (-not (Test-Port $ApiPort)) {
     while (-not (Test-Port $ApiPort) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
 } else { Write-Host "API already up on :$ApiPort" }
 
-# 3) queue worker (sends invitation / password-reset emails)
+# 4) queue worker (sends invitation / password-reset emails)
 if (-not (Get-CimInstance Win32_Process -Filter "Name='php.exe'" | Where-Object { $_.CommandLine -like '*queue:work*' })) {
     Write-Host "starting queue worker ..."
     Start-Process -FilePath $PHP -ArgumentList 'artisan','queue:work','--tries=3' `
@@ -134,7 +158,7 @@ if (-not (Get-CimInstance Win32_Process -Filter "Name='php.exe'" | Where-Object 
         Where-Object { $_.CommandLine -like '*queue:work*' } | Select-Object -First 1 -ExpandProperty ProcessId)
 } else { Write-Host "queue worker already running" }
 
-# 4) frontend (Vite; config is strictPort=3000)
+# 5) frontend (Vite; config is strictPort=3000)
 if (-not (Test-Port $FrPort)) {
     Write-Host "starting frontend on :$FrPort ..."
     Start-Process -FilePath 'cmd.exe' -ArgumentList '/c','npm run dev > "%TEMP%\jahez_vite.log" 2>&1' `
@@ -154,7 +178,7 @@ $trackedPids += Get-CimInstance Win32_Process -Filter "Name='node.exe' OR Name='
     ForEach-Object ProcessId
 @{ pids = @($trackedPids | Where-Object { $_ }) } | ConvertTo-Json | Set-Content $PidFile
 
-# 5) verify
+# 6) verify
 Start-Sleep -Seconds 2
 $health = $null
 try { $health = (Invoke-WebRequest "http://localhost:$ApiPort/api/v1/health" -UseBasicParsing -TimeoutSec 10).Content } catch { }

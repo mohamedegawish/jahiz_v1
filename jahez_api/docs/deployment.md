@@ -144,7 +144,7 @@ A job that fails for good writes one `error` line, `Queued job failed`, with the
 
 The repository root holds a production Compose stack (`docker-compose.yml`, `jahez_api/Dockerfile`, `front/Dockerfile`):
 - MySQL 8.4;
-- the API on Apache. Its entrypoint caches config, routes and views on every start; in the `api` service only (`RUN_MIGRATIONS=true`) it also runs `migrate --force` and `db:seed --force` (reference data, idempotent);
+- the API on Apache. Its entrypoint caches config, events, routes and views on every start; in the `api` service only (`RUN_MIGRATIONS=true`) it also runs `migrate --force`, `db:seed --force` (reference data, idempotent) and `app:check-production` (logged, not fatal). Two optional steps there: with `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_NAME` and `INITIAL_ADMIN_PASSWORD` set it creates the first IMC administrator (`app:create-admin --password-env=INITIAL_ADMIN_PASSWORD --if-missing`: once, an existing account is left untouched; clear the password variable after the first deploy), and with `SEED_DEMO_DATA=true` it runs `DemoDataSeeder`, which refuses outside `APP_ENV=local`/`testing`;
 - a queue worker and a scheduler (`schedule:work`) from the same image, running as `www-data`. They start once the api is healthy, so they never race its migrations;
 - the built frontend on nginx, with an SPA fallback and the security headers of `front/docker/security-headers.inc`.
 
@@ -157,7 +157,7 @@ docker compose --env-file .env.docker exec api php artisan app:check-production 
 docker compose --env-file .env.docker exec api php artisan app:create-admin admin@example.org "Full Name"
 ```
 
-Deploying on Coolify: add the repository as a Docker Compose resource with the base directory at the repository root (do not include `docker-compose.local.yml`), paste the `.env.docker` values into the resource's Environment Variables (every `${VAR}` in `docker-compose.yml` is detected there automatically; `${VAR:?…}` entries block deployment while empty), and add one domain on the `api` service (internal port 80, e.g. `https://api.example.com`) and one on the `frontend` service (internal port 80, e.g. `https://app.example.com`). Set `FRONT_API_URL` as a build-time variable as well: it is baked into the frontend image, so changing it requires a redeploy with rebuild. Post-deploy, open the `api` container's terminal in Coolify and run `php artisan app:check-production` (must PASS) and, on the first deploy only, `php artisan app:create-admin admin@example.org "Full Name"`.
+Deploying on Coolify: add the repository as a Docker Compose resource with the base directory at the repository root (do not include `docker-compose.local.yml`), paste the `.env.docker` values into the resource's Environment Variables (every `${VAR}` in `docker-compose.yml` is detected there automatically; `${VAR:?…}` entries block deployment while empty), and add one domain on the `api` service (internal port 80, e.g. `https://api.example.com`) and one on the `frontend` service (internal port 80, e.g. `https://app.example.com`). Set `FRONT_API_URL` as a build-time variable as well: it is baked into the frontend image, so changing it requires a redeploy with rebuild. Post-deploy, open the `api` container's terminal in Coolify and run `php artisan app:check-production` (must PASS) and, on the first deploy only, `php artisan app:create-admin admin@example.org "Full Name"` (or set `INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_NAME` / `INITIAL_ADMIN_PASSWORD` before deploying and clear the password afterwards).
 
 Notes:
 

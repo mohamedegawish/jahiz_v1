@@ -53,6 +53,14 @@ services:
     environment:
       # The one service that migrates and seeds the reference data on start.
       RUN_MIGRATIONS: "true"
+      # Optional start-up steps (jahez_api/docker/api-entrypoint.sh). The first IMC
+      # administrator is created once, while INITIAL_ADMIN_EMAIL is set; clear
+      # INITIAL_ADMIN_PASSWORD after the first deploy. SEED_DEMO_DATA seeds the demo data
+      # set only under APP_ENV=local (the seeder refuses in production).
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
+      INITIAL_ADMIN_NAME: ${INITIAL_ADMIN_NAME:-}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
       APP_NAME: ${APP_NAME:-Jahez}
       APP_ENV: ${APP_ENV:-production}
       APP_DEBUG: ${APP_DEBUG:-false}

@@ -18,6 +18,8 @@ use function Laravel\Prompts\password;
  * First-time setup (ADR-011): accounts are otherwise created only by an IMC administrator
  * through the API, so the first administrator is created from the server console.
  * The password is prompted for, never passed as an argument, so it stays out of shell history.
+ * An unattended start (docker/api-entrypoint.sh) names an environment variable holding it
+ * instead (--password-env), and passes --if-missing so later starts leave the account alone.
  */
 class CreateAdminUser extends Command
 {
@@ -28,7 +30,9 @@ class CreateAdminUser extends Command
      */
     protected $signature = 'app:create-admin
                             {email : Email address of the IMC administrator}
-                            {name : Display name}';
+                            {name : Display name}
+                            {--password-env= : Read the password from this environment variable instead of prompting}
+                            {--if-missing : Succeed without changes when the email already has an account}';
 
     /**
      * The console command description.
@@ -42,12 +46,34 @@ class CreateAdminUser extends Command
      */
     public function handle(): int
     {
+        $email = (string) $this->argument('email');
+
+        if ($this->option('if-missing') && User::query()->where('email', $email)->exists()) {
+            $this->components->info("An account for {$email} already exists; nothing was created.");
+
+            return self::SUCCESS;
+        }
+
+        $passwordVariable = (string) $this->option('password-env');
+        if ($passwordVariable !== '') {
+            $password = (string) getenv($passwordVariable);
+            if ($password === '') {
+                $this->components->error("The environment variable {$passwordVariable} is empty or not set.");
+
+                return self::FAILURE;
+            }
+            $confirmation = $password;
+        } else {
+            $password = password('Password', required: true);
+            $confirmation = password('Confirm password', required: true);
+        }
+
         $input = [
-            'email' => $this->argument('email'),
+            'email' => $email,
             'name' => $this->argument('name'),
-            'password' => password('Password', required: true),
+            'password' => $password,
+            'password_confirmation' => $confirmation,
         ];
-        $input['password_confirmation'] = password('Confirm password', required: true);
 
         $validator = Validator::make($input, [
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')],
