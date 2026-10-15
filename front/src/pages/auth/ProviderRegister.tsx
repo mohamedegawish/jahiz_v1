@@ -16,6 +16,7 @@ import { ServiceChoice } from '../../components/ui/ServicePicker';
 import { TextField } from '../../components/ui/TextField';
 import { AuthShell } from './AuthShell';
 import { appendFile, appendList, appendText } from '../../lib/forms';
+import { PASSWORD_HINT, appendSecret, passwordIssue } from '../../lib/password';
 import { FormSection, RegistrationSubmitted } from './RegistrationParts';
 
 interface ProviderForm {
@@ -101,8 +102,9 @@ const ProviderRegistrationForm: React.FC<{ options: RegistrationOptions }> = ({ 
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (values.password !== values.password_confirmation) {
-      setFormHint('تأكيد كلمة المرور غير مطابق لكلمة المرور.');
+    const passwordProblem = passwordIssue(values.password, values.password_confirmation);
+    if (passwordProblem !== null) {
+      setFormHint(passwordProblem);
       return;
     }
     setFormHint(null);
@@ -110,6 +112,7 @@ const ProviderRegistrationForm: React.FC<{ options: RegistrationOptions }> = ({ 
     (Object.keys(values) as (keyof ProviderForm)[]).forEach((key) => {
       // Normalize email once (trim + lowercase) so `User@Example.com` and `user@example.com` map to one account.
       if (key === 'email') appendText(form, key, values[key].trim().toLowerCase());
+      else if (key === 'password' || key === 'password_confirmation') appendSecret(form, key, values[key]);
       else appendText(form, key, values[key]);
     });
     appendList(form, 'sectors', sectors);
@@ -158,7 +161,7 @@ const ProviderRegistrationForm: React.FC<{ options: RegistrationOptions }> = ({ 
           <TextField label="كلمة المرور" required type="password" dir="ltr" value={values.password} onChange={(v) => { set('password')(v); setFormHint(null); }} messages={errors('password')} disabled={disabled} autoComplete="new-password" />
           <TextField label="تأكيد كلمة المرور" required type="password" dir="ltr" value={values.password_confirmation} onChange={(v) => { set('password_confirmation')(v); setFormHint(null); }} messages={errors('password_confirmation')} disabled={disabled} autoComplete="new-password" />
         </div>
-        <p className="text-[11px] text-[#667085]">8 أحرف على الأقل. تُحفظ كلمة المرور مشفّرة ولا تُرسل بأي بريد.</p>
+        <p className="text-[11px] text-[#667085]">{PASSWORD_HINT}</p>
       </FormSection>
 
       <FormSection title="العنوان">

@@ -37,3 +37,11 @@ it('lets browser clients read the request ID header', function () {
 
     expect($response->headers->get('Access-Control-Expose-Headers'))->toContain('X-Request-Id');
 });
+
+// Finding PA-21: every web-client call carries Authorization and X-Request-Id, so each
+// needs a preflight; with max_age 0 the browser asked again before every request.
+it('lets browsers reuse a preflight answer for ten minutes', function () {
+    config(['cors.allowed_origins' => ['https://app.jahez.test']]);
+
+    sendCorsPreflight('https://app.jahez.test')->assertHeader('Access-Control-Max-Age', '600');
+});

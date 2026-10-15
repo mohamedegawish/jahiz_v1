@@ -11,8 +11,10 @@ enum AuditEvent: string
     case LoginFailed = 'auth.login_failed';
     case LoginThrottled = 'auth.login_throttled';
     case LoggedOut = 'auth.logged_out';
+    case LoggedOutEverywhere = 'auth.logged_out_everywhere';
     case PasswordResetRequested = 'auth.password_reset_requested';
     case PasswordResetCompleted = 'auth.password_reset_completed';
+    case PasswordChanged = 'auth.password_changed';
     case UserCreated = 'user.created';
     case UserRenamed = 'user.renamed';
     case UserDeactivated = 'user.deactivated';

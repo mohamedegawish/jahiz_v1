@@ -21,10 +21,10 @@ test('only the token store touches browser storage', () => {
   // Code only: comments that mention storage do not count.
   const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/.*$/gm, '');
   const users = files.filter((file) => /\b(localStorage|sessionStorage|indexedDB)\b/.test(code(file.text))).map((file) => file.path);
-  // Exception: lib/rotation.ts keeps only the admin-set ad-slide rotation period (a UI
-  // preference; the API has no field for it — see AdsManagement). No business, eligibility,
-  // plan or permission data may live in browser storage.
-  assert.deepEqual(users, ['auth/tokenStore.ts', 'lib/rotation.ts']);
+  // No business, eligibility, plan, permission or admin setting may live in browser storage:
+  // an admin choice kept there would apply to the admin's own browser only (the ad rotation
+  // period now lives in the API's landing settings).
+  assert.deepEqual(users, ['auth/tokenStore.ts']);
 });
 
 test('roadmap and eligibility screens read their data from the API, never from a fixture', () => {

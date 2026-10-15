@@ -192,3 +192,76 @@ describe('administration', function () {
         $this->getJson(route('api.v1.announcements.index'))->assertUnauthorized();
     });
 });
+
+/**
+ * A published hero announcement with an uploaded mp4 of $size bytes.
+ */
+function publishedHeroVideo(int $size = 4096): int
+{
+    Sanctum::actingAs(User::factory()->imcAdmin()->create());
+    $id = test()->postJson(route('api.v1.announcements.store'), announcementPayload(['placement' => 'hero']))->assertCreated()->json('data.id');
+    $content = "\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2mp41";
+    test()->post(route('api.v1.announcements.video.store', $id), [
+        'file' => UploadedFile::fake()->createWithContent('hero.mp4', $content.str_repeat("\x00", $size - strlen($content))),
+    ], ['Accept' => 'application/json'])->assertOk();
+    test()->postJson(route('api.v1.announcements.publish', $id))->assertOk();
+    app('auth')->forgetGuards();
+
+    return $id;
+}
+
+describe('public media (production audit)', function () {
+    // PA-26: Safari and iOS play a <video> only from a server that answers byte ranges.
+    it('answers a byte range of a public video', function () {
+        $id = publishedHeroVideo(4096);
+
+        $this->get(route('api.v1.public.announcements.video', $id), ['Range' => 'bytes=0-99'])
+            ->assertStatus(206)
+            ->assertHeader('Accept-Ranges', 'bytes')
+            ->assertHeader('Content-Range', 'bytes 0-99/4096')
+            ->assertHeader('Content-Length', '100')
+            ->assertHeader('Content-Type', 'video/mp4');
+    });
+
+    // PA-21: the public media is the same for every visitor; it may be kept briefly.
+    it('lets caches keep public media briefly, and nothing else', function () {
+        $id = publishedHeroVideo();
+
+        $public = $this->get(route('api.v1.public.announcements.video', $id))->assertOk();
+        expect($public->headers->getCacheControlDirective('public'))->toBeTrue()
+            ->and($public->headers->getCacheControlDirective('max-age'))->toBe('300');
+
+        $json = $this->getJson(route('api.v1.public.announcements.index'))->assertOk();
+        expect($json->headers->get('Cache-Control'))->toContain('no-store');
+
+        Sanctum::actingAs(User::factory()->imcAdmin()->create());
+        $preview = $this->get(route('api.v1.announcements.video', $id))->assertOk();
+        expect($preview->headers->get('Cache-Control'))->toContain('no-store');
+    });
+
+    it('answers 404, not 500, when a recorded file is missing', function () {
+        $announcement = storedAnnouncement();
+        $announcement->video_disk = 'local';
+        $announcement->video_path = 'announcements/gone.mp4';
+        $announcement->video_mime_type = 'video/mp4';
+        $announcement->save();
+
+        $this->get(route('api.v1.public.announcements.video', $announcement))->assertNotFound();
+    });
+});
+
+// PA-22: the hero-video page read the first 30 announcements of every placement and could
+// miss the hero record; IMC can list one placement.
+it('lists one placement for IMC', function () {
+    storedAnnouncement(['title' => 'Top banner', 'placement' => 'top']);
+    $hero = storedAnnouncement(['title' => 'Hero', 'placement' => 'hero']);
+    Sanctum::actingAs(User::factory()->imcAdmin()->create());
+
+    $this->getJson(route('api.v1.announcements.index', ['filter' => ['placement' => 'hero']]))
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $hero->id);
+    $this->getJson(route('api.v1.announcements.index', ['filter' => ['placement' => 'sidebar']]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['filter.placement']);
+});

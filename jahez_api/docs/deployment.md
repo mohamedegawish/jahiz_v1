@@ -17,16 +17,25 @@ The command prints a PASS / WARN / FAIL table and exits non-zero on any FAIL. **
 | --- | --- | --- |
 | APP_ENV is production | not `production` | Strict model mode and demo seeding are tied to the environment |
 | APP_DEBUG is off | `APP_DEBUG=true` | Debug responses include exception details; Laravel Boost routes are enabled |
-| APP_KEY is set | empty | Encryption |
+| APP_KEY is a generated key | empty, a placeholder, or not a `base64:` key of the cipher's length | Encryption; the `.env.docker.example` placeholder used to pass (finding PA-05) |
 | APP_URL / FRONTEND_URL use HTTPS | not `https://` | Reset and invitation links point to `FRONTEND_URL` |
 | Mailer sends real email | `log` or `array` | The log mailer writes reset links (valid tokens) to the log ([ADR-011](decisions/ADR-011-account-provisioning-and-credentials.md)) |
 | Queue is asynchronous | `sync` | Reset and invitation emails are sent by jobs; with `sync` the forgot-password timing protection is lost |
 | CORS has no wildcard origin | `*` in `CORS_ALLOWED_ORIGINS` | Deny-by-default CORS |
+| Web client origin is allowed by CORS | `FRONTEND_URL`'s origin differs from `APP_URL`'s and is not in `CORS_ALLOWED_ORIGINS` | Otherwise every browser call is refused (finding PA-05) |
 | Hash driver is bcrypt | `HASH_DRIVER` is not `bcrypt` | The login timing hash is bcrypt; another driver makes unknown emails fail with 500 (finding FC-06) |
 | BCRYPT_ROUNDS matches the login timing hash | not 12 | Unknown and known emails must cost the same |
 | Database is MySQL | another driver | [ADR-004](decisions/ADR-004-database-mysql.md) |
+| Required provider fields are known | `JAHEZ_PROVIDER_REQUIRED_FIELDS` lists an unknown field | [OQ-36](open-questions.md#oq-36) |
+| Factory onboarding fields are known | `JAHEZ_FACTORY_REQUIRED_FIELDS` lists an unknown field | [OQ-19](open-questions.md#oq-19) |
+| Organization documents are on a private disk | `JAHEZ_DOCUMENTS_DISK` is public, served or not configured | Tax and commercial registry documents ([ADR-019](decisions/ADR-019-self-registration-documents-and-legal-changes.md)) |
+| Provider evaluation scale / pass mark are valid | not a positive whole number / not 0–100 with at most two decimals (empty counts as unset) | [OQ-13](open-questions.md#oq-13) |
+| Business time zone is valid | not a time zone identifier | Policy dates ([ADR-023](decisions/ADR-023-financial-and-contract-policies.md)) |
+| No financial rule is set in the environment | any obsolete `JAHEZ_INVOICE_*` / `JAHEZ_TAX_*` / `JAHEZ_REVENUE_*` set | These rules are approved policies now ([ADR-023](decisions/ADR-023-financial-and-contract-policies.md)) |
+| Payment gateway is registered | `JAHEZ_PAYMENT_GATEWAY` names no registered adapter | [OQ-16](open-questions.md#oq-16) |
 | Trusted proxies configured (WARN) | unset, `*` or `**` | Unset: every guest shares the proxy's rate limit. `*`: safe only if clients cannot reach the app except through the proxy |
-| Log level (WARN) | `debug` | Verbose |
+| Log level (WARN) | `debug` on the channel in use (each channel of a stack) | Verbose |
+| PHP upload limits fit the largest upload (WARN) | `upload_max_filesize` / `post_max_size` below the largest upload (a video, or a registration's three documents) | PHP refuses the request before the application sees it (finding PA-03); the Docker image sets 25 MB / 30 MB in `docker/php.ini` |
 | Sessions are not stored (WARN) | `SESSION_DRIVER` is not `array` | The API uses no sessions and has no web routes ([ADR-013](decisions/ADR-013-api-only.md)); `array` keeps it that way if a route that starts sessions is ever added (findings FC-09, FC-17) |
 
 ## 2. Environment
@@ -89,7 +98,8 @@ php artisan app:create-admin admin@example.org "Full Name"   # first deployment 
 ```
 
 - `--no-dev` also removes Laravel Boost and the MCP middleware, which exist only for development.
-- There is no front-end build: no `npm` step ([ADR-013](decisions/ADR-013-api-only.md)).
+- The web client (`front/`) is a separate static build: `npm ci && VITE_API_BASE_URL=https://api.example.com/api/v1 npm run build`, served by nginx with `front/docker/nginx.conf` and `front/docker/security-headers.inc` (its Content-Security-Policy must name the API origin; the Docker build writes it from the same variable). The API itself stays API-only ([ADR-013](decisions/ADR-013-api-only.md)).
+- Back up the database and the documents disk before migrating (§6).
 - Run `gitleaks git --log-opts="--all" --redact .` on the release commit (no leaks expected), and the test suite on the production MySQL version.
 - **Drain the queue before deploying a change to a queued job's constructor** (`php artisan queue:work --stop-when-empty` on the old release). Jobs serialized by the old code are missing the new properties.
 
@@ -97,23 +107,48 @@ php artisan app:create-admin admin@example.org "Full Name"   # first deployment 
 
 | Process | Command | Required because |
 | --- | --- | --- |
-| Queue worker | `php artisan queue:work` (kept running by a process supervisor) | Reset and invitation emails ([ADR-011](decisions/ADR-011-account-provisioning-and-credentials.md)) |
-| Scheduler | `* * * * * php artisan schedule:run` | `sanctum:prune-expired` (daily) |
+| Queue worker | `php artisan queue:work --tries=3 --timeout=60 --max-time=3600` (kept running by a process supervisor; needs the `pcntl` extension to stop gracefully) | Reset and invitation emails ([ADR-011](decisions/ADR-011-account-provisioning-and-credentials.md)), notification emails |
+| Scheduler | `* * * * * php artisan schedule:run` | `sanctum:prune-expired` (daily), `auth:clear-resets` (every 15 minutes), `queue:prune-failed --hours=168` (daily), `payments:reconcile` (every 15 minutes) |
+
+A job that fails for good writes one `error` line, `Queued job failed`, with the job class, connection and queue (never the payload) (finding PA-18). Alert on it. The job itself stays in `failed_jobs` for a week (`php artisan queue:failed`, `queue:retry <id>`).
 
 ## 5. Web server
 
 - Serve only the `public/` directory, over HTTPS. The application sends HSTS on requests it sees as HTTPS (which, behind a proxy, needs `TRUSTED_PROXIES`); the proxy may also set it.
-- Set `expose_php = Off` in `php.ini`.
+- Set `expose_php = Off`, `upload_max_filesize = 25M` and `post_max_size = 30M` in `php.ini` (the Docker image does: `docker/php.ini`).
 - The local storage disk is not served by Laravel (`serve => false`), so no `/storage/...` route exists.
 
 ## 6. Data
 
-- **Backups and retention** are not defined yet ([OQ-25](open-questions.md#oq-25)). The `audit_logs` table grows without limit until then ([ADR-012](decisions/ADR-012-audit-log.md)).
+- **Retention** is not defined yet ([OQ-25](open-questions.md#oq-25)). The `audit_logs` table grows without limit until then ([ADR-012](decisions/ADR-012-audit-log.md)).
+- **Backups (procedure written in the 2026-10-15 production audit; not yet exercised, no staging host exists).** Two things hold the platform's state: the MySQL database and the documents disk (`api-storage` volume in Docker: logos, registration documents, announcement media). Back up both, at the same time, at least daily and before every deployment that migrates. Keep copies off the host.
+
+  ```bash
+  # Database: a consistent dump without locking InnoDB tables.
+  docker compose --env-file .env.docker exec -T mysql sh -c 'exec mysqldump --single-transaction --routines --triggers -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' | gzip > jahez-db-$(date +%F).sql.gz
+  # Documents and media.
+  docker run --rm -v <project>_api-storage:/data:ro -v "$PWD":/backup alpine tar czf /backup/jahez-storage-$(date +%F).tar.gz -C /data app
+  ```
+
+  **Restore drill** (on a scratch stack, never on production; repeat after any change to this procedure):
+  1. Start an empty stack.
+  2. `gunzip -c jahez-db-….sql.gz | docker compose exec -T mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"'`.
+  3. Extract the storage archive into the new `api-storage` volume.
+  4. `php artisan app:check-production`.
+  5. Sign in as an administrator and open a factory's registration document.
+
+  The dump contains password hashes, documents and personal data: store and transfer it encrypted.
 - The audit log is append-only in the application only. To protect it in the database as well, the application's database user would need to lose UPDATE and DELETE on `audit_logs`. That is not configured, pending the retention decision.
 
 ## 7. Docker deployment
 
-The repository root holds a production Compose stack (`docker-compose.yml`, `jahez_api/Dockerfile`, `front/Dockerfile`): MySQL 8.4, the API on Apache (migrations + config/route/view caching run in the entrypoint on every start), a queue worker and a scheduler (`schedule:work`: `sanctum:prune-expired`, `payments:reconcile`) from the same image, and the built frontend on nginx with an SPA fallback. Uploaded documents persist in the `api-storage` volume; the database in `mysql-data`. No host ports are published: HTTP reaches the containers only through the reverse proxy / Coolify domains, and MySQL is reachable only inside the Compose network.
+The repository root holds a production Compose stack (`docker-compose.yml`, `jahez_api/Dockerfile`, `front/Dockerfile`):
+- MySQL 8.4;
+- the API on Apache. Its entrypoint caches config, routes and views on every start; in the `api` service only (`RUN_MIGRATIONS=true`) it also runs `migrate --force` and `db:seed --force` (reference data, idempotent);
+- a queue worker and a scheduler (`schedule:work`) from the same image, running as `www-data`. They start once the api is healthy, so they never race its migrations;
+- the built frontend on nginx, with an SPA fallback and the security headers of `front/docker/security-headers.inc`.
+
+Logs go to the container log (`LOG_CHANNEL=stderr`). PHP settings (upload limits, `expose_php`, opcache) are in `jahez_api/docker/php.ini`. Uploaded documents persist in the `api-storage` volume; the database in `mysql-data`. No host ports are published: HTTP reaches the containers only through the reverse proxy / Coolify domains, and MySQL is reachable only inside the Compose network.
 
 ```bash
 cp .env.docker.example .env.docker   # fill in APP_KEY, passwords, URLs, mail
@@ -130,5 +165,8 @@ Notes:
 - `VITE_API_BASE_URL` is baked into the frontend at build time (`FRONT_API_URL`); changing it needs `docker compose up -d --build frontend` (or a Coolify redeploy).
 - Terminate TLS in front of the stack (reverse proxy / Coolify proxy) and set `TRUSTED_PROXIES` so the app sees HTTPS; the go-live gate (§1) refuses plain-http `APP_URL` / `FRONTEND_URL`. `CORS_ALLOWED_ORIGINS` must be the exact frontend origin.
 - Queue jobs are `database`-backed, so no Redis is required; the `queue` service is the process supervisor's equivalent here.
-- No host cron is needed: the `scheduler` service runs `php artisan schedule:work` (covers `sanctum:prune-expired` and `payments:reconcile`).
-- This stack has not been exercised on a real server yet (same status as §1–§6 above).
+- No host cron is needed: the `scheduler` service runs `php artisan schedule:work` (every task in §4).
+- `FRONT_API_URL` is required: the frontend build stops without it (there is no localhost fallback). For local Docker set it to `http://localhost:8000/api/v1`.
+- The business settings of §2 are passed through Compose with the application's defaults; set them in `.env.docker` / Coolify only once the owner decides them.
+- The `IMC number` unique-index migration (2026-10-15) stops, without changing anything, if existing factories or providers already share an IMC number, and names them. IMC decides which record keeps the number; correct the others, then redeploy ([OQ-59](open-questions.md#oq-59)).
+- This stack has not been exercised on a real server yet (same status as §1–§6 above). The 2026-10-15 audit checked the Compose files' structure and the shell steps without Docker; the first real run must confirm the build, the `www-data` ownership of the `api-storage` volume, and the healthchecks.

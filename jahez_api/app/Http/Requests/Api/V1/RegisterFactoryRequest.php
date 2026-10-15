@@ -7,6 +7,7 @@ use App\Http\Requests\Api\V1\Concerns\ValidatesOrganizationDetails;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 /**
  * Public factory registration (ADR-019), sent as multipart form data. The contact person
@@ -47,14 +48,17 @@ class RegisterFactoryRequest extends FormRequest
             'contact_phone' => ['required', 'string', 'regex:/^[0-9+() -]{6,30}$/'],
             'website' => ['sometimes', 'nullable', 'string', 'url:http,https', 'max:255'],
             // The member chooses the password on the form and signs in immediately:
-            // no email round-trip, no invitation link. Always required with confirmation.
-            'password' => ['required', 'string', 'min:8', 'max:72', 'confirmed'],
+            // no email round-trip, no invitation link. Always required with confirmation,
+            // under the platform policy (at least 12 characters, at most 72 bytes; PA-06).
+            'password' => ['required', 'string', 'confirmed', Password::defaults()],
             'governorate' => ['required', 'string', 'max:100'],
             'city' => ['required', 'string', 'max:100'],
             'address' => ['required', 'string', 'max:500'],
             'commercial_registration_number' => ['required', 'string', 'regex:'.self::REGISTRATION_NUMBER_PATTERN],
             'tax_registration_number' => ['required', 'string', 'regex:'.self::REGISTRATION_NUMBER_PATTERN],
-            'imc_number' => ['required', 'string', 'regex:'.self::REGISTRATION_NUMBER_PATTERN, Rule::exists('imc_registered_numbers', 'number')],
+            // On the IMC list, and not already registered by another factory (PA-10; the
+            // unique index on factories.imc_number is the backstop for concurrent requests).
+            'imc_number' => ['required', 'string', 'regex:'.self::REGISTRATION_NUMBER_PATTERN, Rule::exists('imc_registered_numbers', 'number'), Rule::unique($this->imcNumberTable(), 'imc_number')],
             ...$this->documentRules(true),
         ];
     }

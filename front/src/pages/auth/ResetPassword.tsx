@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Lock } from 'lucide-react';
 import { api, fieldMessages } from '../../api';
@@ -7,20 +7,31 @@ import { ApiErrorState } from '../../components/ui/ApiErrorState';
 import { Button } from '../../components/ui/Button';
 import { FieldError } from '../../components/ui/FieldError';
 import { fieldErrorClass } from '../../lib/forms';
+import { PASSWORD_HINT, passwordIssue } from '../../lib/password';
 import { AuthShell } from './AuthShell';
 
 /**
  * Landing page of the reset and invitation links the API emails:
  *   {FRONTEND_URL}/reset-password?token=...&email=...
  * A new account's first password is set here too.
+ *
+ * The token is read once, then removed from the address bar and the history entry, so it
+ * does not stay in the browser history or reach a later page (the router keeps its own copy).
  */
 export const ResetPassword: React.FC = () => {
   const [params] = useSearchParams();
-  const token = params.get('token') ?? '';
-  const email = params.get('email') ?? '';
+  const [token] = useState(() => params.get('token') ?? '');
+  const [email] = useState(() => params.get('email') ?? '');
+
+  useEffect(() => {
+    if (window.location.search !== '') {
+      window.history.replaceState(window.history.state, '', window.location.pathname);
+    }
+  }, []);
 
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
+  const [hint, setHint] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const submit = useApiMutation(() =>
     api.auth.resetPassword({ token, email, password, password_confirmation: confirmation }),
@@ -28,6 +39,9 @@ export const ResetPassword: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    const problem = passwordIssue(password, confirmation);
+    setHint(problem);
+    if (problem !== null) return;
     const result = await submit.run();
     if (result.ok) setDone(true);
   };
@@ -97,8 +111,8 @@ export const ResetPassword: React.FC = () => {
             />
             <Lock className="w-4 h-4 text-[#98A2B3] absolute left-3 top-3 pointer-events-none" />
           </div>
-          <p className="mt-1 text-[11px] text-[#98A2B3]">12 حرفًا على الأقل.</p>
-          <FieldError messages={passwordErrors} />
+          <p className="mt-1 text-[11px] text-[#98A2B3]">{PASSWORD_HINT}</p>
+          <FieldError messages={hint !== null ? [hint, ...passwordErrors] : passwordErrors} />
         </div>
         <div>
           <label htmlFor="reset-confirmation" className="font-bold text-[#172033] block mb-1">

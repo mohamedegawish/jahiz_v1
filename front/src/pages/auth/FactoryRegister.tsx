@@ -16,6 +16,7 @@ import { SectorChoice } from '../../components/ui/SectorPicker';
 import { TextField } from '../../components/ui/TextField';
 import { AuthShell } from './AuthShell';
 import { appendFile, appendList, appendText } from '../../lib/forms';
+import { PASSWORD_HINT, appendSecret, passwordIssue } from '../../lib/password';
 import { FormSection, RegistrationSubmitted } from './RegistrationParts';
 
 interface FactoryForm {
@@ -143,8 +144,8 @@ const FactoryRegistrationForm: React.FC<{ options: RegistrationOptions }> = ({ o
       if (values.contact_job_title.trim() === '') return 'أدخل المسمى الوظيفي لمسؤول التواصل للمتابعة.';
       if (!isEmail(values.contact_email)) return 'أدخل بريدًا إلكترونيًا صحيحًا لمسؤول التواصل للمتابعة (مثال: name@company.com).';
       if (values.contact_phone.trim() === '') return 'أدخل رقم هاتف مسؤول التواصل للمتابعة.';
-      if (values.password.length < 8) return 'اختر كلمة مرور من 8 أحرف على الأقل للمتابعة.';
-      if (values.password !== values.password_confirmation) return 'تأكيد كلمة المرور غير مطابق لكلمة المرور.';
+      const passwordProblem = passwordIssue(values.password, values.password_confirmation);
+      if (passwordProblem !== null) return passwordProblem;
       return null;
     }
     if (target === 2) {
@@ -190,6 +191,7 @@ const FactoryRegistrationForm: React.FC<{ options: RegistrationOptions }> = ({ o
     const form = new FormData();
     (Object.keys(values) as (keyof FactoryForm)[]).forEach((key) => {
       if (key === 'contact_email') appendText(form, key, values[key].trim().toLowerCase());
+      else if (key === 'password' || key === 'password_confirmation') appendSecret(form, key, values[key]);
       else appendText(form, key, values[key]);
     });
     appendList(form, 'sectors', sectors);
@@ -274,7 +276,7 @@ const FactoryRegistrationForm: React.FC<{ options: RegistrationOptions }> = ({ o
             disabled={disabled}
             className="w-full p-2.5 rounded-xl border border-[#E6EAF0] text-xs bg-white focus:outline-none focus:border-[#004A93]"
           >
-            <option value="">— اختياري —</option>
+            <option value="">— اختر حجم المنشأة —</option>
             {options.factory_sizes.map((size) => (
               <option key={size.code} value={size.code}>{size.name_ar}</option>
             ))}
@@ -294,7 +296,7 @@ const FactoryRegistrationForm: React.FC<{ options: RegistrationOptions }> = ({ o
           <TextField label="كلمة المرور" required type="password" dir="ltr" value={values.password} onChange={set('password')} messages={errors('password')} disabled={disabled} autoComplete="new-password" />
           <TextField label="تأكيد كلمة المرور" required type="password" dir="ltr" value={values.password_confirmation} onChange={set('password_confirmation')} messages={errors('password_confirmation')} disabled={disabled} autoComplete="new-password" />
         </div>
-        <p className="text-[11px] text-[#667085]">8 أحرف على الأقل. تُحفظ كلمة المرور مشفّرة ولا تُرسل بأي بريد.</p>
+        <p className="text-[11px] text-[#667085]">{PASSWORD_HINT}</p>
       </FormSection>
       )}
 

@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response as HttpResponse;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Throwable;
 
@@ -63,7 +63,7 @@ class PublicAnnouncementController extends Controller
     /**
      * A live announcement's cover; a draft's, scheduled or ended one's is not found.
      */
-    public function publicCover(int $publicAnnouncement): StreamedResponse
+    public function publicCover(int $publicAnnouncement): HttpResponse
     {
         $announcement = PublicAnnouncement::query()->live()->findOrFail($publicAnnouncement);
         abort_unless($announcement->hasCover(), 404);
@@ -74,7 +74,7 @@ class PublicAnnouncementController extends Controller
     /**
      * A live announcement's video; a draft's, scheduled or ended one's is not found.
      */
-    public function publicVideo(int $publicAnnouncement): StreamedResponse
+    public function publicVideo(int $publicAnnouncement): HttpResponse
     {
         $announcement = PublicAnnouncement::query()->live()->findOrFail($publicAnnouncement);
         abort_unless($announcement->hasVideo(), 404);
@@ -87,13 +87,19 @@ class PublicAnnouncementController extends Controller
     public function index(ListRequest $request): AnonymousResourceCollection
     {
         Gate::authorize('viewAny', PublicAnnouncement::class);
-        $request->validate(['filter.published' => ['sometimes', 'boolean'], 'filter' => ['sometimes', 'array:published']]);
+        $request->validate([
+            'filter.published' => ['sometimes', 'boolean'],
+            'filter.placement' => ['sometimes', 'string', Rule::in(PublicAnnouncement::PLACEMENTS)],
+            'filter' => ['sometimes', 'array:published,placement'],
+        ]);
 
         return PublicAnnouncementResource::collection(
             PublicAnnouncement::query()
                 ->when($request->has('filter.published'), fn (Builder $query) => $request->boolean('filter.published')
                     ? $query->whereNotNull('published_at')
                     : $query->whereNull('published_at'))
+                // The hero-video page reads only its own placement, whatever the page size (PA-22).
+                ->when($request->filled('filter.placement'), fn (Builder $query) => $query->where('placement', $request->string('filter.placement')->toString()))
                 ->displayOrder()
                 ->paginate($request->perPage())
                 ->withQueryString()
@@ -253,7 +259,7 @@ class PublicAnnouncementController extends Controller
     /**
      * Any announcement's cover, for the administrators' preview of drafts.
      */
-    public function cover(PublicAnnouncement $publicAnnouncement): StreamedResponse
+    public function cover(PublicAnnouncement $publicAnnouncement): HttpResponse
     {
         Gate::authorize('update', $publicAnnouncement);
         abort_unless($publicAnnouncement->hasCover(), 404);
@@ -329,7 +335,7 @@ class PublicAnnouncementController extends Controller
     /**
      * Any announcement's video, for the administrators' preview of drafts.
      */
-    public function video(PublicAnnouncement $publicAnnouncement): StreamedResponse
+    public function video(PublicAnnouncement $publicAnnouncement): HttpResponse
     {
         Gate::authorize('update', $publicAnnouncement);
         abort_unless($publicAnnouncement->hasVideo(), 404);

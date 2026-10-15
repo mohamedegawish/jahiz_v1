@@ -26,7 +26,7 @@ const STATE: Record<AdminAnnouncement['state'], { label: string; variant: 'succe
  * the landing hero frame instead of the bundled demo file.
  */
 export const HeroVideoSettings: React.FC = () => {
-  const list = useApiQuery((signal) => api.announcements.list({ page: 1, per_page: 30, signal }), []);
+  const list = useApiQuery((signal) => api.announcements.list({ page: 1, per_page: 100, filter: { placement: 'hero' }, signal }), []);
 
   return (
     <div className="space-y-6">
@@ -93,7 +93,7 @@ const HeroVideoCard: React.FC<{ record: AdminAnnouncement | null; onChanged: () 
       id = created.id;
     }
     await api.announcements.uploadVideo(id, file);
-    const current = await api.announcements.list({ page: 1, per_page: 30 });
+    const current = await api.announcements.list({ page: 1, per_page: 100, filter: { placement: 'hero' } });
     const saved = current.data.find((a) => a.id === id);
     if (saved && !saved.published_at) await api.announcements.publish(id);
   });

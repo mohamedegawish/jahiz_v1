@@ -114,6 +114,8 @@ export interface User {
   role: Role;
   organization: Organization | null;
   is_active: boolean;
+  /** False until a link sent to the address was used (a self-registered email is unproven). */
+  email_verified: boolean;
   created_at: string | null;
 }
 
@@ -1552,6 +1554,8 @@ export interface LandingSettings {
   footer_tagline: string | null;
   footer_copyright: string | null;
   footer_supervision: string | null;
+  /** Seconds each landing ad slide stays on screen (3–60); null means the bundled default. */
+  ad_rotation_seconds: number | null;
   updated_at: string | null;
 }
 
@@ -1587,6 +1591,7 @@ export interface LandingSettingsPayload {
   footer_tagline?: string | null;
   footer_copyright?: string | null;
   footer_supervision?: string | null;
+  ad_rotation_seconds?: number | null;
 }
 
 // ───────────────────────── Financial and contract policies (ADR-023) ─────────────────────────

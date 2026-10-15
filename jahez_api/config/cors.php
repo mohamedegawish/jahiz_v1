@@ -34,7 +34,9 @@ return [
 
     'exposed_headers' => ['X-Request-Id', 'Retry-After', 'X-RateLimit-Limit', 'X-RateLimit-Remaining'],
 
-    'max_age' => 0,
+    // The web client sends Authorization and X-Request-Id on every call, so each call
+    // needs a preflight; browsers may reuse its answer for 10 minutes (finding PA-21).
+    'max_age' => 600,
 
     'supports_credentials' => false,
 

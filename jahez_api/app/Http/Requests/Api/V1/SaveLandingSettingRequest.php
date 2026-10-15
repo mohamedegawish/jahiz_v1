@@ -82,6 +82,8 @@ class SaveLandingSettingRequest extends FormRequest
             'footer_tagline' => $text(120),
             'footer_copyright' => $text(200),
             'footer_supervision' => $text(200),
+            // Seconds each landing ad slide stays on screen (PA-15); null restores the default.
+            'ad_rotation_seconds' => ['sometimes', 'nullable', 'integer', 'between:2,120'],
         ];
     }
 }

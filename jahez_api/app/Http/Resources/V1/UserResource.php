@@ -28,6 +28,9 @@ class UserResource extends JsonResource
             'role' => $this->role->value,
             'organization' => $this->organization(),
             'is_active' => $this->isActive(),
+            // False until a link sent to the address was used: a self-registered member's
+            // email is unproven (finding PA-08), so IMC reviewers can tell.
+            'email_verified' => $this->email_verified_at !== null,
             'created_at' => $this->created_at?->toIso8601ZuluString(),
         ];
     }

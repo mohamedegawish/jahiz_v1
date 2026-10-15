@@ -1,10 +1,11 @@
 ﻿import React, { Suspense } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { PublicHeader } from '../components/layout/PublicHeader';
-import { ErrorBoundary } from '../components/ui/ErrorBoundary';
+import { RouteErrorBoundary } from '../components/ui/ErrorBoundary';
 import { RouteFallback } from '../components/ui/RouteFallback';
 import { api, publicApiUrl } from '../api';
 import { useApiQuery } from '../hooks/useApiQuery';
+import { useLandingSettings } from '../hooks/useLandingSettings';
 import { LANDING_DEFAULTS, logoSrc, pick } from '../lib/landingDefaults';
 
 /** Footer placement: the second (bigger) admin-uploaded video announcement above the footer columns (hidden when none). */
@@ -48,8 +49,7 @@ const FooterAdVideo: React.FC = () => {
  * falls back to the bundled copy, so the layout never depends on the API.
  */
 export const PublicLayout: React.FC = () => {
-  const content = useApiQuery((signal) => api.landing.publicContent(signal), []);
-  const settings = content.data ?? null;
+  const settings = useLandingSettings();
   return (
   <div className="min-h-screen bg-[#F7F9FC] flex flex-col text-right" dir="rtl">
     <a
@@ -60,11 +60,11 @@ export const PublicLayout: React.FC = () => {
     </a>
     <PublicHeader logoUrl={logoSrc(settings, publicApiUrl)} />
     <main id="main-content" className="flex-1 w-full">
-      <ErrorBoundary>
+      <RouteErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
           <Outlet />
         </Suspense>
-      </ErrorBoundary>
+      </RouteErrorBoundary>
     </main>
     <footer className="border-t border-[#E6EAF0] bg-white">
       <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 md:py-12 lg:px-8">

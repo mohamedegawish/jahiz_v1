@@ -1,4 +1,5 @@
 ﻿import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { AlertTriangle, RotateCcw } from 'lucide-react';
 
 interface ErrorBoundaryState {
@@ -6,8 +7,9 @@ interface ErrorBoundaryState {
 }
 
 /**
- * Route-level error boundary: a crashing page shows a recoverable card instead of a
- * blank screen. Mounted around each layout's <Outlet/> (see AppLayout / PublicLayout).
+ * Error boundary: a crashing page shows a recoverable card instead of a blank screen.
+ * Inside the router use RouteErrorBoundary, which resets on navigation; this plain class
+ * also wraps the whole app in main.tsx, outside the router.
  */
 export class ErrorBoundary extends React.Component<React.PropsWithChildren, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false };
@@ -52,3 +54,12 @@ export class ErrorBoundary extends React.Component<React.PropsWithChildren, Erro
   }
 }
 
+/**
+ * The route-level boundary (around <Routes> and each layout's <Outlet/>). It remounts
+ * on every path change, so after one page crashes the next page renders normally instead
+ * of keeping the error card until a full reload.
+ */
+export const RouteErrorBoundary: React.FC<React.PropsWithChildren> = ({ children }) => {
+  const { pathname } = useLocation();
+  return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>;
+};

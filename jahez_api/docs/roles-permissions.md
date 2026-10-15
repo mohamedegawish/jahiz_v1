@@ -150,7 +150,8 @@ While no issuer is configured, anyone who can see the agreement gets 409 `policy
 
 ### Always available to any authenticated, active account
 - `GET /api/v1/me`: own profile, organization and permissions.
-- `POST /api/v1/auth/logout`.
+- `POST /api/v1/auth/logout`; `POST /api/v1/auth/logout-all` (every token of the account).
+- `PATCH /api/v1/me` (name, email notifications) and `PUT /api/v1/me/password` (needs the current password; signs out the account's other devices; 5/min per account).
 
 ## Rules for new endpoints
 1. Add a policy method that checks a **permission** for platform-wide access and **ownership** (the user's own organization) for member access.

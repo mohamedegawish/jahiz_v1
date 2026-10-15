@@ -5,6 +5,7 @@ use App\Models\AuditLog;
 use App\Models\Factory;
 use App\Models\ImcRegisteredNumber;
 use App\Models\User;
+use App\Services\ImcRegisteredNumberImporter;
 use Database\Seeders\ReferenceDataSeeder;
 use Illuminate\Http\UploadedFile;
 use Laravel\Sanctum\Sanctum;
@@ -267,5 +268,74 @@ describe('bulk import', function () {
         $this->post(route('api.v1.imc-registered-numbers.import'), [
             'file' => UploadedFile::fake()->createWithContent('numbers.csv', "name,number\nNile,IMC-2026-001\n"),
         ], ['Accept' => 'application/json'])->assertForbidden();
+    });
+});
+
+/**
+ * A minimal .xlsx holding one worksheet with the given XML, for the import edge cases.
+ */
+function xlsxWithSheet(string $sheetXml): UploadedFile
+{
+    $path = tempnam(sys_get_temp_dir(), 'imc-import').'.xlsx';
+    $zip = new ZipArchive;
+    $zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+    $zip->addFromString('xl/worksheets/sheet1.xml', $sheetXml);
+    $zip->close();
+
+    return new UploadedFile($path, 'numbers.xlsx', null, null, true);
+}
+
+describe('bulk import edge cases (production audit)', function () {
+    // PA-33: an unreadable workbook was a 500; it is a validation error on the file.
+    it('answers 422 for a workbook it cannot read', function () {
+        imcAdmin();
+        $path = tempnam(sys_get_temp_dir(), 'imc-import').'.xlsx';
+        file_put_contents($path, 'PK this is not a zip archive');
+
+        $this->post(route('api.v1.imc-registered-numbers.import'), [
+            'file' => new UploadedFile($path, 'numbers.xlsx', null, null, true),
+        ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['file']);
+        $this->assertDatabaseCount('imc_registered_numbers', 0);
+    });
+
+    it('answers 422 for a workbook without a worksheet', function () {
+        imcAdmin();
+        $path = tempnam(sys_get_temp_dir(), 'imc-import').'.xlsx';
+        $zip = new ZipArchive;
+        $zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        $zip->addFromString('xl/workbook.xml', '<workbook/>');
+        $zip->close();
+
+        $this->post(route('api.v1.imc-registered-numbers.import'), [
+            'file' => new UploadedFile($path, 'numbers.xlsx', null, null, true),
+        ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['file']);
+    });
+
+    // PA-28: a small upload can expand to a huge worksheet (a zip bomb); it is refused
+    // from its declared size, before anything is expanded into memory.
+    it('refuses a worksheet that expands beyond the limit', function () {
+        imcAdmin();
+        $sheet = '<worksheet><sheetData>'.str_repeat(' ', ImcRegisteredNumberImporter::MAX_XML_BYTES + 1).'</sheetData></worksheet>';
+
+        $this->post(route('api.v1.imc-registered-numbers.import'), ['file' => xlsxWithSheet($sheet)], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['file']);
+        $this->assertDatabaseCount('imc_registered_numbers', 0);
+    });
+
+    // PA-32: the imported rows and their audit entry are committed together (ADR-012).
+    it('imports nothing when the audit entry cannot be written', function () {
+        imcAdmin();
+        AuditLog::creating(fn (): never => throw new RuntimeException('Audit store unavailable.'));
+
+        $this->post(route('api.v1.imc-registered-numbers.import'), [
+            'file' => UploadedFile::fake()->createWithContent('numbers.csv', "name,number\nNile,IMC-2026-001\n"),
+        ], ['Accept' => 'application/json'])->assertServerError();
+
+        $this->assertDatabaseCount('imc_registered_numbers', 0);
     });
 });

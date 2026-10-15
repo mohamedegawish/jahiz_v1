@@ -2,7 +2,7 @@
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Header } from '../components/layout/Header';
-import { ErrorBoundary } from '../components/ui/ErrorBoundary';
+import { RouteErrorBoundary } from '../components/ui/ErrorBoundary';
 import { RouteFallback } from '../components/ui/RouteFallback';
 
 /** Layout of the signed-in portals (IMC, factory, provider): sidebar and header. Public pages use PublicLayout. */
@@ -39,11 +39,11 @@ export const AppLayout: React.FC = () => {
 
         {/* Page Content Viewport */}
         <main id="main-content" className="flex-1 w-full p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-          <ErrorBoundary>
+          <RouteErrorBoundary>
             <Suspense fallback={<RouteFallback />}>
               <Outlet />
             </Suspense>
-          </ErrorBoundary>
+          </RouteErrorBoundary>
         </main>
       </div>
     </div>

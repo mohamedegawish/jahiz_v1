@@ -15,7 +15,7 @@ run.bat status     :: DB / API / frontend status + API health
 run.bat stop       :: stop everything this launcher started
 ```
 
-Details per part: `jahez_api/README.md`, `front/README.md`. API conventions: `jahez_api/docs/api-conventions.md`. Deployment gate: `jahez_api/docs/deployment.md`.
+Details per part: `jahez_api/README.md`, `front/README.md`. Production audit (2026-10-15): `jahez_api/docs/phases/phase-production-audit.md`. API conventions: `jahez_api/docs/api-conventions.md`. Deployment gate: `jahez_api/docs/deployment.md`.
 
 ## Deploy with Docker
 
@@ -29,7 +29,8 @@ docker compose --env-file .env.docker exec api php artisan app:create-admin admi
 ```
 
 - Generate `APP_KEY` with `php artisan key:generate --show` from `jahez_api/` (never reuse a dev key).
-- Update: `git pull && docker compose --env-file .env.docker up -d --build` (migrations run automatically on start).
+- Update: back up the database and the `api-storage` volume (`jahez_api/docs/deployment.md` §6), then `git pull && docker compose --env-file .env.docker up -d --build`. The `api` service migrates and seeds the reference data on start; the queue worker and the scheduler wait until it is healthy.
+- `FRONT_API_URL` is required (the frontend build stops without it); for local Docker use `http://localhost:8000/api/v1`.
 - Coolify: deploy the repo as a Docker Compose resource (base = repo root, without `docker-compose.local.yml`), paste `.env.docker` values into Environment Variables, add one domain per `api` / `frontend` service (internal port 80). Redeploy to update.
 - Terminate TLS in front of the stack and set `TRUSTED_PROXIES`; the go-live gate refuses plain-http URLs.
 - Full notes: `jahez_api/docs/deployment.md` (§7) and `.env.docker.example`.

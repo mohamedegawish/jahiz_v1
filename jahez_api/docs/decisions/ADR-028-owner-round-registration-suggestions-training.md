@@ -59,3 +59,15 @@ Owner-requested round (2026-10-10), preserving all existing business logic:
   can never be sent.
 - New tests: `CategorySuggestionTest` (suggest/review/duplicate/cart-gate),
   `CategorySuggestionPolicyTest`, `RegistrationTest` direct-password block.
+
+## Addendum (2026-10-15): hardening of D1 (production audit)
+
+The owner kept instant sign-in after registration ("keep instant login, harden", 2026-10-14). Changed (findings PA-06 to PA-10):
+
+- **Password policy:** the registration password follows `Password::defaults()`, like every other password: at least 12 characters, at most 72 **bytes**. The former `min:8|max:72` counted characters, so a long Arabic password was silently cut by bcrypt. The web client checks the same rule and sends the password exactly as typed; it used to trim it, so a password with surrounding spaces could never sign in.
+- **Email proof:** the member's `email_verified_at` stays null until a reset link sent to the address is used. Administrators see `email_verified` in the user list. Sign-in does not depend on it ([OQ-58](../open-questions.md#oq-58)).
+- **Enumeration:**
+  - the password is hashed before the existing-email branch, so both paths pay bcrypt;
+  - the 202 message is worded for both cases ("if this email had no account, it was created…").
+  - Residual, accepted with instant sign-in: "register, then try to sign in" still tells whether an email was new, limited by `throttle:registration`.
+- **IMC number:** must not already be registered in the same table (validation and a unique index); the public number check has its own limit of 20 per minute per IP ([OQ-59](../open-questions.md#oq-59)).

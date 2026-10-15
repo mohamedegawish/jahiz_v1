@@ -4,6 +4,7 @@ import { AuthProvider } from './auth/AuthProvider';
 import { RequireAuth, RequireRole } from './auth/guards';
 import { AppLayout } from './layouts/AppLayout';
 import { PublicLayout } from './layouts/PublicLayout';
+import { RouteErrorBoundary } from './components/ui/ErrorBoundary';
 
 // Auth Page (public first paint — eager)
 import { LoginPage } from './pages/auth/LoginPage';
@@ -80,6 +81,8 @@ export const App: React.FC = () => {
   return (
     <AuthProvider>
       <BrowserRouter>
+        {/* Covers the pages outside the two layouts (sign-in, registration, reset, 404). */}
+        <RouteErrorBoundary>
         <Routes>
           {/* Public Auth Routes */}
           <Route path="/login" element={<LoginPage />} />
@@ -169,6 +172,7 @@ export const App: React.FC = () => {
           {/* Fallback Catch-All */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </RouteErrorBoundary>
       </BrowserRouter>
     </AuthProvider>
   );
