@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Http\Responses\StoredFileResponse;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * An announcement IMC publishes on the public landing page (ADR-022). It names no
@@ -143,13 +144,11 @@ class PublicAnnouncement extends Model
 
     /**
      * The cover image inline, with the content type detected at upload. The caller
-     * decides who may read it (SecurityHeaders keeps API responses out of caches).
+     * decides who may read it (SecurityHeaders lets shared caches keep only the public copies briefly).
      */
-    public function coverResponse(): StreamedResponse
+    public function coverResponse(): Response
     {
-        return Storage::disk((string) $this->cover_disk)->response((string) $this->cover_path, null, [
-            'Content-Type' => (string) $this->cover_mime_type,
-        ], 'inline');
+        return StoredFileResponse::inline((string) $this->cover_disk, (string) $this->cover_path, (string) $this->cover_mime_type);
     }
 
     public function deleteCoverFile(): void
@@ -166,13 +165,11 @@ class PublicAnnouncement extends Model
 
     /**
      * The video inline, with the content type detected at upload. The caller
-     * decides who may read it (SecurityHeaders keeps API responses out of caches).
+     * decides who may read it (SecurityHeaders lets shared caches keep only the public copies briefly).
      */
-    public function videoResponse(): StreamedResponse
+    public function videoResponse(): Response
     {
-        return Storage::disk((string) $this->video_disk)->response((string) $this->video_path, null, [
-            'Content-Type' => (string) $this->video_mime_type,
-        ], 'inline');
+        return StoredFileResponse::inline((string) $this->video_disk, (string) $this->video_path, (string) $this->video_mime_type);
     }
 
     public function deleteVideoFile(): void

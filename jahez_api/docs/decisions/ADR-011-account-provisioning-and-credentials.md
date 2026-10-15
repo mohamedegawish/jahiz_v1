@@ -33,3 +33,14 @@ Reset and invitation tokens are created **inside** the queue jobs and emailed sy
 - A **queue worker** (`php artisan queue:work`) must run, or invitation and reset emails are never sent. With `QUEUE_CONNECTION=sync`, the timing protection of the forgot-password endpoint is lost.
 - **Production must not use `MAIL_MAILER=log`.** The log mailer writes reset links, and therefore valid tokens, into `storage/logs/laravel.log`.
 - `FRONTEND_URL` must point at the client application that implements the `/reset-password` page.
+
+## Addendum (2026-10-15): changing the password while signed in, signing out everywhere
+
+- **Context:** production audit findings PA-12 and PA-27. Passwords changed only through the emailed reset link. Since ADR-028 a self-registered account never needs an email, so on a host without working mail it had no way to change its password, and no way to cut off a lost device short of a reset.
+- **Decision:**
+  - `PUT /me/password` needs the current password (`current_password:sanctum`) and applies `Password::defaults()`; the new password must differ from the current one.
+  - It revokes every **other** token of the account and keeps the one used. The change, the revoked tokens and the `auth.password_changed` audit entry (no secret, only the number of revoked credentials) are one transaction.
+  - It is limited to 5 attempts per minute per account, so the current password cannot be guessed through it faster than through login.
+  - `POST /auth/logout-all` revokes every token of the account, the current one included, and is audited `auth.logged_out_everywhere`.
+  - A changed password does **not** verify the email address; only a reset link sent to it does.
+- **Unchanged:** the reset flow, its timing protection and its queue requirements.

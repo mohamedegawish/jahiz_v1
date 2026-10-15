@@ -58,6 +58,7 @@ class LandingSettingResource extends JsonResource
             'footer_tagline' => $this->footer_tagline,
             'footer_copyright' => $this->footer_copyright,
             'footer_supervision' => $this->footer_supervision,
+            'ad_rotation_seconds' => $this->ad_rotation_seconds,
             'updated_at' => $this->updated_at?->toIso8601ZuluString(),
         ];
     }

@@ -11,7 +11,7 @@
 | gitleaks | 8.30.1 | Secret scan of the full git history |
 | k6 | 2.2.0 | Performance scripts in `tests/performance/` ([plan](../performance/plan.md)) |
 
-**Not available yet:** Newman (Postman CLI), Locust, CI (no remote), a staging environment.
+**Not available yet:** Newman (Postman CLI), Locust, a staging environment. **CI:** `.github/workflows/ci.yml` (added 2026-10-15) runs the suite on MySQL 8.4, Larastan, Pint, `composer audit`, the web client's lint, tests, build and `npm audit`, and gitleaks on every push and pull request; it runs once the branch is pushed to the GitHub remote.
 
 ## 2. Commands
 

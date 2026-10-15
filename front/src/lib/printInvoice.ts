@@ -49,8 +49,11 @@ ${invoice.fees !== null && Number(invoice.fees) > 0 ? `<div>الرسوم: ${esca
 <div class="total">الإجمالي: ${escape(invoice.total === null ? 'يُحدَّد عند الإصدار' : formatMoneyOf(invoice.total, invoice.currency))}</div>
 </div>
 <footer>نسخة مطبوعة من بيانات المنصة كما هي. لا تُضاف إليها رسوم أو عمولات غير مسجلة في الفاتورة.${invoice.policy_basis === 'legacy' ? ' سجل سابق لإدارة السياسات المالية.' : ''} النسخة المطبوعة ليست مستندًا ضريبيًا معتمدًا ما لم يُعتمد ذلك.</footer>
-<script>window.onload=function(){window.print();}</script>
 </body></html>`);
   win.document.close();
+  // Printed from here, not by an inline script in the written page: that page inherits the
+  // app's Content-Security-Policy, whose script-src allows no inline script.
+  win.focus();
+  win.print();
   return true;
 }

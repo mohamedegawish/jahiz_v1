@@ -1,0 +1,1 @@
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: __API_ORIGIN__; media-src 'self' blob: __API_ORIGIN__; connect-src 'self' __API_ORIGIN__; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'

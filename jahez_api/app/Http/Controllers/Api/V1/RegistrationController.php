@@ -30,15 +30,18 @@ use Throwable;
  *
  * A registration is validated here and created synchronously in the same request: the
  * organization, its first member (with the password chosen on the form) and the
- * uploads. The response is the same 202 whether or not the email already has an
- * account, and the request does the same work either way (validate, and for a new
- * email store the uploads and create the records), so neither the response nor its
- * timing reveals which emails are registered (ADR-011). No email is ever sent from
- * this path: the new member signs in immediately with the chosen password.
+ * uploads. The response is the same 202, with a text that fits both cases, whether or
+ * not the email already has an account (ADR-011). The password is hashed before that
+ * branch, so the dominant cost (bcrypt) is paid either way (finding PA-09). No email is
+ * ever sent from this path: the new member signs in immediately with the chosen password.
+ *
+ * Residual (ADR-028, recorded with PA-09): because a new member can sign in at once,
+ * "register, then try to sign in" tells whether an email was new. `throttle:registration`
+ * limits how often that can be tried.
  */
 class RegistrationController extends Controller
 {
-    public const RESPONSE_MESSAGE = 'Thank you. Your account has been created: sign in now with your email address and password.';
+    public const RESPONSE_MESSAGE = 'Thank you. If this email address had no account, it has been created: sign in now with it and your password. If it already had one, nothing was changed: sign in with your current password or reset it.';
 
     public function __construct(private readonly OrganizationRegistrar $registrar) {}
 
@@ -78,6 +81,7 @@ class RegistrationController extends Controller
     public function factory(RegisterFactoryRequest $request): JsonResponse
     {
         $email = $request->string('contact_email')->toString();
+        $passwordHash = Hash::make($request->string('password')->toString());
         if ($this->registrar->emailTaken($email)) {
             return $this->accepted();
         }
@@ -87,7 +91,7 @@ class RegistrationController extends Controller
             OrganizationRegistrar::FACTORY,
             $request->safe()->only(['name', 'legal_name', 'size', 'contact_name', 'contact_job_title', 'contact_email', 'contact_phone', 'website', 'governorate', 'city', 'address', 'commercial_registration_number', 'tax_registration_number', 'imc_number']),
             ['sectors' => $request->validated('sectors', []), 'services' => []],
-            ['name' => $request->string('contact_name')->toString(), 'email' => $email, 'password' => $request->string('password')->toString()],
+            ['name' => $request->string('contact_name')->toString(), 'email' => $email, 'password_hash' => $passwordHash],
         );
 
         return $this->accepted();
@@ -96,6 +100,7 @@ class RegistrationController extends Controller
     public function serviceProvider(RegisterServiceProviderRequest $request): JsonResponse
     {
         $email = $request->string('email')->toString();
+        $passwordHash = Hash::make($request->string('password')->toString());
         if ($this->registrar->emailTaken($email)) {
             return $this->accepted();
         }
@@ -105,7 +110,7 @@ class RegistrationController extends Controller
             OrganizationRegistrar::SERVICE_PROVIDER,
             $request->safe()->only([...ServiceProvider::PROFILE_FIELDS, ...ServiceProvider::LEGAL_FIELDS]),
             ['sectors' => $request->validated('sectors', []), 'services' => $request->validated('services', [])],
-            ['name' => $request->string('representative_name')->toString(), 'email' => $email, 'password' => $request->string('password')->toString()],
+            ['name' => $request->string('representative_name')->toString(), 'email' => $email, 'password_hash' => $passwordHash],
         );
 
         return $this->accepted();
@@ -120,7 +125,7 @@ class RegistrationController extends Controller
      * @param  OrganizationRegistrar::FACTORY|OrganizationRegistrar::SERVICE_PROVIDER  $kind
      * @param  array<string, mixed>  $details  validated organization fields
      * @param  array{sectors: list<string>, services: list<string>}  $codes
-     * @param  array{name: string, email: string, password: string}  $account  plain password, hashed here
+     * @param  array{name: string, email: string, password_hash: string}  $account  bcrypt hash, never a plain password
      */
     private function create(FormRequest $request, string $kind, array $details, array $codes, array $account): void
     {
@@ -135,7 +140,7 @@ class RegistrationController extends Controller
                     $kind,
                     $details,
                     $codes,
-                    ['name' => $account['name'], 'email' => $account['email'], 'password_hash' => Hash::make($account['password'])],
+                    $account,
                     $documents,
                     (string) Str::uuid(),
                     $request->ip(),

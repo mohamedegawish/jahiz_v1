@@ -8,8 +8,10 @@ use App\Http\Requests\Api\V1\StoreProviderEvaluationRequest;
 use App\Models\Factory;
 use App\Models\ServiceProvider;
 use Illuminate\Console\Command;
+use Illuminate\Encryption\Encrypter;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
  * Go-live gate (Phase 9): checks the loaded configuration for settings that are unsafe
@@ -70,12 +72,17 @@ class CheckProductionConfiguration extends Command
         return [
             $this->check('APP_ENV is production', app()->isProduction(), 'APP_ENV='.app()->environment()),
             $this->check('APP_DEBUG is off', Config::get('app.debug') === false, 'Debug mode exposes exception details and enables Laravel Boost routes'),
-            $this->check('APP_KEY is set', filled(Config::get('app.key')), 'Generate with php artisan key:generate'),
+            $this->check('APP_KEY is a generated key', $this->appKeyIsGenerated(), 'Generate with php artisan key:generate --show (a base64: key of the cipher\'s length); a placeholder value is not a key'),
             $this->check('APP_URL uses HTTPS', Str::startsWith(Config::string('app.url'), 'https://'), Config::string('app.url')),
             $this->check('FRONTEND_URL uses HTTPS', Str::startsWith(Config::string('api.frontend_url'), 'https://'), 'Reset and invitation links point here'),
             $this->check('Mailer sends real email', ! in_array($mailer, ['log', 'array'], true), "MAIL_MAILER={$mailer}; the log mailer writes reset tokens to the log"),
             $this->check('Queue is asynchronous', $queue !== 'sync', "QUEUE_CONNECTION={$queue}; run php artisan queue:work"),
             $this->check('CORS has no wildcard origin', ! in_array('*', $origins, true), 'CORS_ALLOWED_ORIGINS must list exact origins'),
+            $this->check(
+                'Web client origin is allowed by CORS',
+                $this->frontendOriginIsAllowed($origins),
+                'CORS_ALLOWED_ORIGINS must contain the origin of FRONTEND_URL ('.$this->origin(Config::string('api.frontend_url')).') when the web client is served from another origin than APP_URL; otherwise every browser call is refused'
+            ),
             $this->check(
                 'Hash driver is bcrypt',
                 Config::get('hashing.driver') === 'bcrypt',
@@ -136,8 +143,13 @@ class CheckProductionConfiguration extends Command
             ],
             [
                 'Log level',
-                Config::get('logging.channels.single.level') === 'debug' ? 'WARN' : 'PASS',
+                in_array('debug', $this->activeLogLevels(), true) ? 'WARN' : 'PASS',
                 'LOG_LEVEL=debug is verbose for production',
+            ],
+            [
+                'PHP upload limits fit the largest upload',
+                $this->phpUploadLimitBytes() >= $this->largestUploadBytes() ? 'PASS' : 'WARN',
+                'PHP refuses larger requests before the application sees them: upload_max_filesize and post_max_size must be at least '.intdiv($this->largestUploadBytes(), 1024 * 1024).' MB (the largest JAHEZ_*_MAX_KB, or the three registration documents together); the Docker image sets them in docker/php.ini',
             ],
             [
                 'Sessions are not stored',
@@ -153,5 +165,87 @@ class CheckProductionConfiguration extends Command
     private function check(string $name, bool $passes, string $detail): array
     {
         return [$name, $passes ? 'PASS' : 'FAIL', $detail];
+    }
+
+    /**
+     * A key as key:generate makes it: base64, decoding to the length the cipher needs.
+     * Anything else (empty, a placeholder, a short or raw string) fails (finding PA-05).
+     */
+    private function appKeyIsGenerated(): bool
+    {
+        $key = (string) Config::get('app.key');
+        if (! Str::startsWith($key, 'base64:')) {
+            return false;
+        }
+
+        $decoded = base64_decode(Str::after($key, 'base64:'), true);
+
+        return $decoded !== false && Encrypter::supported($decoded, Config::string('app.cipher'));
+    }
+
+    /**
+     * The web client calls the API from FRONTEND_URL's origin: allowed when it is the API's
+     * own origin, or listed in CORS_ALLOWED_ORIGINS (finding PA-05).
+     *
+     * @param  array<mixed>  $allowedOrigins
+     */
+    private function frontendOriginIsAllowed(array $allowedOrigins): bool
+    {
+        $frontend = $this->origin(Config::string('api.frontend_url'));
+        $allowed = array_map(fn (mixed $origin): string => rtrim((string) $origin, '/'), $allowedOrigins);
+
+        // A wildcard does let the client in; it fails its own check above.
+        return $frontend === $this->origin(Config::string('app.url'))
+            || in_array('*', $allowed, true)
+            || in_array($frontend, $allowed, true);
+    }
+
+    /**
+     * scheme://host[:port] of a URL, lower-cased, as browsers send it in Origin.
+     */
+    private function origin(string $url): string
+    {
+        $parts = parse_url($url);
+        if (! is_array($parts) || ! isset($parts['scheme'], $parts['host'])) {
+            return $url;
+        }
+
+        return Str::lower($parts['scheme'].'://'.$parts['host']).(isset($parts['port']) ? ':'.$parts['port'] : '');
+    }
+
+    /**
+     * The levels of the channel in use: the default channel, or each channel of a stack.
+     *
+     * @return list<string>
+     */
+    private function activeLogLevels(): array
+    {
+        $default = Config::string('logging.default');
+        $channels = Config::get("logging.channels.{$default}.driver") === 'stack'
+            ? (array) Config::get("logging.channels.{$default}.channels", [])
+            : [$default];
+
+        return array_values(array_map(fn (mixed $channel): string => (string) Config::get('logging.channels.'.$channel.'.level', 'debug'), $channels));
+    }
+
+    /**
+     * What PHP accepts in one upload (the lower of upload_max_filesize and post_max_size).
+     */
+    private function phpUploadLimitBytes(): int
+    {
+        return (int) UploadedFile::getMaxFilesize();
+    }
+
+    /**
+     * The largest request body the platform accepts: one announcement video, or a
+     * registration's logo and two legal documents together (finding PA-03).
+     */
+    private function largestUploadBytes(): int
+    {
+        $logo = Config::integer('jahez.documents.logo_max_kb');
+        $legal = Config::integer('jahez.documents.legal_max_kb');
+        $video = Config::integer('jahez.documents.video_max_kb');
+
+        return max($video, $logo + 2 * $legal) * 1024;
     }
 }

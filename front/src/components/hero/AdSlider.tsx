@@ -4,7 +4,8 @@ import { ChevronLeft, ChevronRight, Megaphone, Tag } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { publicApiUrl, type PublicAnnouncement } from '../../api';
 import { getAdPalette } from '../admin/colorOptions';
-import { readRotationSeconds } from '../../lib/rotation';
+import { rotationSeconds } from '../../lib/rotation';
+import { useLandingSettings } from '../../hooks/useLandingSettings';
 
 const SWIPE_COMMIT_PX = 48;
 const SLIDE_EASE: [number, number, number, number] = [0.4, 0, 0.2, 1];
@@ -34,16 +35,17 @@ export const AdSlider: React.FC<{ ads: PublicAnnouncement[] }> = ({ ads }) => {
     setIndex((i) => (i >= count ? 0 : i));
   }
 
-  // autoplay — off while paused (hover/focus) or under reduced motion. The period is
-  // re-read on every tick, so an admin change applies without a page reload.
+  // autoplay — off while paused (hover/focus) or under reduced motion. The period is the
+  // admin's setting from the landing settings (the same for every visitor).
+  const periodMs = rotationSeconds(useLandingSettings()) * 1000;
   useEffect(() => {
     if (count < 2 || paused || reduced) return;
     const t = window.setTimeout(() => {
       setDirection(1);
       setIndex((i) => (i + 1) % count);
-    }, readRotationSeconds() * 1000);
+    }, periodMs);
     return () => window.clearTimeout(t);
-  }, [index, count, paused, reduced]);
+  }, [index, count, paused, reduced, periodMs]);
 
   if (count === 0) return null;
 

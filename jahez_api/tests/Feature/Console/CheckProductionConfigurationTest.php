@@ -56,9 +56,14 @@ it('fails on each unsafe setting', function (array $unsafeSetting, string $faile
         ->and($output)->toContain('1 check(s) failed.');
 })->with([
     'debug mode on' => [['app.debug' => true], 'APP_DEBUG is off'],
-    'missing app key' => [['app.key' => ''], 'APP_KEY is set'],
+    'missing app key' => [['app.key' => ''], 'APP_KEY is a generated key'],
+    // PA-05: a placeholder or a key of the wrong length passed as merely "set".
+    'placeholder app key' => [['app.key' => 'change-me-generate-with-key-generate'], 'APP_KEY is a generated key'],
+    'app key of the wrong length' => [['app.key' => 'base64:'.base64_encode('too short')], 'APP_KEY is a generated key'],
+    'web client origin missing from CORS' => [['cors.allowed_origins' => []], 'Web client origin is allowed by CORS'],
+    'another origin in CORS' => [['cors.allowed_origins' => ['https://other.example']], 'Web client origin is allowed by CORS'],
     'plain HTTP API URL' => [['app.url' => 'http://api.jahez.example'], 'APP_URL uses HTTPS'],
-    'plain HTTP front end' => [['api.frontend_url' => 'http://app.jahez.example'], 'FRONTEND_URL uses HTTPS'],
+    'plain HTTP front end' => [['api.frontend_url' => 'http://app.jahez.example', 'cors.allowed_origins' => ['http://app.jahez.example']], 'FRONTEND_URL uses HTTPS'],
     'log mailer' => [['mail.default' => 'log'], 'Mailer sends real email'],
     'sync queue' => [['queue.default' => 'sync'], 'Queue is asynchronous'],
     'wildcard CORS origin' => [['cors.allowed_origins' => ['*']], 'CORS has no wildcard origin'],
@@ -121,4 +126,38 @@ it('only warns about settings that depend on the hosting setup', function () {
         ->and(productionCheckShows($output, 'WARN', 'Trusted proxies configured'))->toBeTrue()
         ->and(productionCheckShows($output, 'WARN', 'Log level'))->toBeTrue()
         ->and(productionCheckShows($output, 'WARN', 'Sessions are not stored'))->toBeTrue();
+});
+
+// PA-05: when the web client is served from the API's own origin, it needs no CORS entry.
+it('passes a same-origin deployment without a CORS list', function () {
+    useProductionReadyConfiguration();
+    config(['app.url' => 'https://jahez.example', 'api.frontend_url' => 'https://jahez.example', 'cors.allowed_origins' => []]);
+
+    $exitCode = Artisan::call('app:check-production');
+
+    expect($exitCode)->toBe(0)
+        ->and(productionCheckShows(Artisan::output(), 'PASS', 'Web client origin is allowed by CORS'))->toBeTrue();
+});
+
+// PA-03: PHP refuses an upload above upload_max_filesize / post_max_size before Laravel
+// sees it; the limits depend on the host's php.ini, so the gate warns.
+it('warns when the PHP upload limits are below the largest upload the platform accepts', function () {
+    useProductionReadyConfiguration();
+    config(['jahez.documents.video_max_kb' => 100 * 1024 * 1024]);
+
+    $exitCode = Artisan::call('app:check-production');
+
+    expect($exitCode)->toBe(0)
+        ->and(productionCheckShows(Artisan::output(), 'WARN', 'PHP upload limits fit the largest upload'))->toBeTrue();
+});
+
+// PA-14: the containers log to stderr, so the level that matters is the active channel's.
+it('warns about a debug log level on the channel in use', function () {
+    useProductionReadyConfiguration();
+    config(['logging.default' => 'stderr', 'logging.channels.stderr.level' => 'debug']);
+
+    $exitCode = Artisan::call('app:check-production');
+
+    expect($exitCode)->toBe(0)
+        ->and(productionCheckShows(Artisan::output(), 'WARN', 'Log level'))->toBeTrue();
 });

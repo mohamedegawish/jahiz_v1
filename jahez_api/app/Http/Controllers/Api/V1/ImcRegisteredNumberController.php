@@ -103,18 +103,23 @@ class ImcRegisteredNumberController extends Controller
 
     /**
      * Bulk import from an Excel (.xlsx) or CSV file of name + number. Rows are
-     * upserted by the number only; one bad row never rejects the file.
+     * upserted by the number only; one bad row never rejects the file. The rows and the
+     * audit entry are committed together (ADR-012, finding PA-32).
      */
     public function import(ImportImcRegisteredNumbersRequest $request, ImcRegisteredNumberImporter $importer, #[CurrentUser] User $actor): JsonResponse
     {
-        $summary = $importer->import($request->file('file'), $actor);
+        $summary = DB::transaction(function () use ($request, $importer, $actor): array {
+            $summary = $importer->import($request->file('file'), $actor);
 
-        AuditLog::record(AuditEvent::ImcRegisteredNumberImported, $actor, null, [
-            'created' => $summary['created'],
-            'updated' => $summary['updated'],
-            'skipped' => $summary['skipped'],
-            'failed' => count($summary['errors']),
-        ]);
+            AuditLog::record(AuditEvent::ImcRegisteredNumberImported, $actor, null, [
+                'created' => $summary['created'],
+                'updated' => $summary['updated'],
+                'skipped' => $summary['skipped'],
+                'failed' => count($summary['errors']),
+            ]);
+
+            return $summary;
+        });
 
         return response()->json(['data' => $summary]);
     }

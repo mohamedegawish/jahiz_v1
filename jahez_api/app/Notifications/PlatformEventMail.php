@@ -44,12 +44,24 @@ class PlatformEventMail extends Notification implements ShouldQueue
     {
         $message = (new MailMessage)
             ->subject('جاهز: '.$this->event->title())
-            ->line($this->body);
+            ->line(self::asPlainText($this->body));
 
         if ($this->link !== null) {
             $message->action('عرض التفاصيل', rtrim((string) config('api.frontend_url'), '/').$this->link);
         }
 
         return $message->line('سجّلوا الدخول إلى منصة جاهز لمتابعة التفاصيل.');
+    }
+
+    /**
+     * The body as literal text. Mail lines are rendered as Markdown and the body quotes
+     * names users typed (organizations, requests, services), so a name written as a
+     * Markdown link or image would become one in an official email (finding PA-25).
+     * Escaping the brackets is enough: without them there is no link or image, and the
+     * template already escapes HTML. The only link in the email is the action button.
+     */
+    public static function asPlainText(string $body): string
+    {
+        return strtr($body, ['\\' => '\\\\', '[' => '\\[', ']' => '\\]']);
     }
 }

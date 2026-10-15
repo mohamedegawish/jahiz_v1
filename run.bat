@@ -15,7 +15,11 @@ echo ============================================================
 echo.
 
 :run
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0run.ps1" %1
+rem run.ps1 takes switches (-Stop, -Status), not words: a bare "stop" would start everything.
+set "JAHEZ_MODE="
+if /i "%1"=="stop"   set "JAHEZ_MODE=-Stop"
+if /i "%1"=="status" set "JAHEZ_MODE=-Status"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0run.ps1" %JAHEZ_MODE%
 
 if /i "%1"=="stop"   goto :end
 if /i "%1"=="status" goto :end

@@ -20,7 +20,7 @@ class SavePublicAnnouncementRequest extends FormRequest
      * A path of the web client: one leading slash, no scheme or host, an optional
      * simple query string.
      */
-    public const LINK_PATTERN = '/^\/(?!\/)[A-Za-z0-9\/_-]*(\?[A-Za-z0-9=&_-]*)?$/';
+    public const LINK_PATTERN = '/\A\/(?!\/)[A-Za-z0-9\/_-]*(\?[A-Za-z0-9=&_-]*)?\z/';
 
     public function authorize(): Response
     {

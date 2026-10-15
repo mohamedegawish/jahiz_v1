@@ -9,7 +9,7 @@ import { formatDateTime } from '../../lib/format';
 import { AnnouncementFormModal } from '../../components/admin/AnnouncementFormModal';
 import { PromotionsPanel } from '../../components/admin/PromotionsPanel';
 import { AdCard } from '../../components/hero/AdCard';
-import { MAX_ROTATION_SECONDS, MIN_ROTATION_SECONDS, readRotationSeconds, saveRotationSeconds } from '../../lib/rotation';
+import { MAX_ROTATION_SECONDS, MIN_ROTATION_SECONDS, rotationSeconds } from '../../lib/rotation';
 import { ApiErrorState } from '../../components/ui/ApiErrorState';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -133,24 +133,29 @@ export const AdsManagement: React.FC = () => {
 };
 
 /**
- * Slide period of the public home-page strip. The API has no field for it (backend
- * frozen), so the value lives in this browser's localStorage; AdSlider re-reads it
- * on every tick, so a change applies without a reload. Out-of-range input reverts
- * to the last saved value on blur/Enter.
+ * Slide period of the public home-page strips. Saved with the landing settings
+ * (`ad_rotation_seconds`, PUT /landing), so every visitor gets it. Out-of-range input
+ * reverts to the last saved value on blur/Enter.
  */
 const RotationControl: React.FC = () => {
-  const [saved, setSaved] = useState(() => readRotationSeconds());
-  const [value, setValue] = useState(() => String(saved));
+  const current = useApiQuery((signal) => api.landing.publicContent(signal), []);
+  const [saved, setSaved] = useState<number | null>(null);
+  const [value, setValue] = useState<string | null>(null);
+  const save = useApiMutation((seconds: number) => api.landing.update({ ad_rotation_seconds: seconds }));
 
-  const commit = () => {
-    const parsed = Number.parseInt(value, 10);
-    if (Number.isFinite(parsed) && parsed >= MIN_ROTATION_SECONDS && parsed <= MAX_ROTATION_SECONDS) {
-      saveRotationSeconds(parsed);
-      setSaved(parsed);
-      setValue(String(parsed));
-    } else {
-      setValue(String(saved));
+  const stored = saved ?? rotationSeconds(current.data ?? null);
+  const shown = value ?? String(stored);
+
+  const commit = async () => {
+    const parsed = Number(shown);
+    if (!Number.isInteger(parsed) || parsed < MIN_ROTATION_SECONDS || parsed > MAX_ROTATION_SECONDS) {
+      setValue(null);
+      return;
     }
+    if (parsed === stored) return;
+    const result = await save.run(parsed);
+    if (result.ok) setSaved(parsed);
+    setValue(null);
   };
 
   return (
@@ -158,17 +163,19 @@ const RotationControl: React.FC = () => {
       <div>
         <p className="text-sm font-bold text-[#172033]">مدة تدوير الشريط المتحرك</p>
         <p className="text-xs text-[#667085]">
-          الفاصل الزمني بين الشريحة والتالية، من {MIN_ROTATION_SECONDS} إلى {MAX_ROTATION_SECONDS} ثانية — يُحفظ على هذا المتصفح.
+          الفاصل الزمني بين الشريحة والتالية، من {MIN_ROTATION_SECONDS} إلى {MAX_ROTATION_SECONDS} ثانية — يُحفظ على المنصة ويطبَّق على جميع الزوار.
         </p>
+        {save.error !== null && <ApiErrorState compact error={save.error} />}
       </div>
       <div className="flex items-center gap-2">
         <input
           type="number"
           min={MIN_ROTATION_SECONDS}
           max={MAX_ROTATION_SECONDS}
-          value={value}
+          value={shown}
+          disabled={current.status === 'loading' || save.pending}
           onChange={(event) => setValue(event.target.value)}
-          onBlur={commit}
+          onBlur={() => void commit()}
           onKeyDown={(event) => {
             if (event.key === 'Enter') event.currentTarget.blur();
           }}

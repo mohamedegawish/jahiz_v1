@@ -2,7 +2,9 @@
 
 Decisions that need owner (business, product, legal or technical) input. **Do not guess any of these in code.** Where work must proceed first, use the "Interim safe behaviour" and document it as unapproved.
 
-Status as of 2026-10-06 (listing packages and the factory cart, [ADR-027](decisions/ADR-027-listing-packages-and-cart.md)): **OQ-57** was added. Earlier the same day (cumulative levels and plan-based progression, [ADR-026](decisions/ADR-026-cumulative-levels-and-progression.md)): **OQ-56** was added; OQ-52's interim now also opens the next readiness level.
+Status as of 2026-10-15 (production audit, [phase log](phases/phase-production-audit.md)): **OQ-58** (unproven self-registration emails) and **OQ-59** (IMC number unique across factories and providers?) were added.
+
+Earlier status, 2026-10-06 (listing packages and the factory cart, [ADR-027](decisions/ADR-027-listing-packages-and-cart.md)): **OQ-57** was added. Earlier the same day (cumulative levels and plan-based progression, [ADR-026](decisions/ADR-026-cumulative-levels-and-progression.md)): **OQ-56** was added; OQ-52's interim now also opens the next readiness level.
 
 Earlier status, 2026-10-05 (readiness eligibility and transformation plans, [ADR-025](decisions/ADR-025-readiness-eligibility-and-transformation-plans.md)): **OQ-52 to OQ-55** were added; **OQ-12** is partly answered.
 
@@ -69,6 +71,8 @@ Earlier status (Phases 4–7). **OQ-01** (the workbook was in the repository all
 | [OQ-55](#oq-55) | Planned dates, costs and owners in a transformation plan | Business | Low | Dates as commitments, costs, acknowledgement |
 | [OQ-56](#oq-56) | Can an opened readiness level be closed again (lower reassessment, IMC correction)? (**interim: never closed**) | Business / IMC | Medium | Revoking an opened level |
 | [OQ-57](#oq-57) | Listed package prices: binding? tax-inclusive? visible to IMC on requests? (**interim: informational, not binding, parties only**) | Business / Finance | Medium | Binding price lists, checkout with payment |
+| [OQ-58](#oq-58) | Must a self-registered account prove its email before signing in or before approval? (**interim: instant sign-in kept, email marked unverified until a reset link is used**) | Business / IMC security | Medium | Email verification step, approval rule |
+| [OQ-59](#oq-59) | Is the IMC number unique across factories and providers together, or within each? (**interim: unique within each table, as the profile edits already were**) | Business | Low | A cross-table uniqueness check |
 
 ## Details
 
@@ -532,3 +536,32 @@ Earlier status (Phases 4–7). **OQ-01** (the workbook was in the repository all
   - listed prices are informational EGP amounts, reviewed with the listing, never copied into offers, agreements or invoices;
   - the cart only sends requests;
   - the selection is shown to the factory and the provider only.
+
+<a id="oq-58"></a>
+### OQ-58: Unproven email addresses of self-registered accounts
+
+- **Context (production audit 2026-10-15, findings PA-08 and PA-09; [ADR-028](decisions/ADR-028-owner-round-registration-suggestions-training.md) D1):**
+  - a registrant chooses a password and signs in at once, so nothing proves they own the email address they typed;
+  - the account was marked verified anyway.
+- **Risks:**
+  - someone can register an organization under another person's corporate address, and platform emails then go to that person;
+  - "register, then try to sign in" tells whether an email already had an account. `throttle:registration` limits how often that can be tried.
+- **Questions:**
+  - Should sign-in, or IMC approval, wait for a confirmation link sent to the address?
+  - Should IMC reviewers treat an unverified contact differently?
+- **Interim (applied, owner decision 2026-10-14 "keep instant login, harden"):**
+  - instant sign-in is kept;
+  - `email_verified_at` stays null until a reset link sent to the address is used;
+  - the user list shows administrators `email_verified`;
+  - the real owner of an address can always take the account back with a password reset.
+
+<a id="oq-59"></a>
+### OQ-59: Scope of the IMC number's uniqueness
+
+- **Context (production audit 2026-10-15, finding PA-10):**
+  - `docs/api-endpoints.md` says the IMC number is unique across all organizations;
+  - the profile edits checked it only within the organization's own table, and registration did not check it at all, so one whitelisted number could register several factories.
+- **Question:** may a factory and a provider share an IMC number, or must the number be unique across both kinds?
+- **Interim (applied):**
+  - unique within each table: a validation rule at registration, and a unique index on `factories.imc_number` and `service_providers.imc_number`;
+  - the migration stops, without changing data, if existing records already share a number.

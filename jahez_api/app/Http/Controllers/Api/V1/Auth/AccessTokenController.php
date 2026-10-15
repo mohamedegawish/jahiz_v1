@@ -68,4 +68,19 @@ class AccessTokenController extends Controller
 
         return response()->noContent();
     }
+
+    /**
+     * Log out everywhere: revoke every token of the account, the one used for this
+     * request included (for example after losing a device).
+     */
+    public function destroyAll(#[CurrentUser] User $user): Response
+    {
+        DB::transaction(function () use ($user): void {
+            $revoked = $user->tokens()->delete();
+
+            AuditLog::record(AuditEvent::LoggedOutEverywhere, $user, $user, ['credentials_revoked' => $revoked]);
+        });
+
+        return response()->noContent();
+    }
 }

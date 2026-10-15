@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AccountPasswordController;
 use App\Http\Controllers\Api\V1\AccountSettingsController;
 use App\Http\Controllers\Api\V1\AgreementController;
 use App\Http\Controllers\Api\V1\AgreementFinancialReadinessController;
@@ -82,6 +83,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::post('logout', [AccessTokenController::class, 'destroy'])
             ->middleware('auth:sanctum')
             ->name('logout');
+        Route::post('logout-all', [AccessTokenController::class, 'destroyAll'])
+            ->middleware('auth:sanctum')
+            ->name('logout-all');
     });
 
     // Public self-registration (ADR-019). The response is the same 202 whether or not the
@@ -89,8 +93,11 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
     Route::prefix('registration')->name('registration.')->group(function (): void {
         Route::get('options', [RegistrationController::class, 'options'])->name('options');
         // Live check of the factory IMC number against the IMC-registered list: answers
-        // only whether the number is known, so a visitor knows to contact IMC first.
-        Route::get('imc-numbers/check', [RegistrationController::class, 'checkImcNumber'])->name('imc-numbers.check');
+        // only whether the number is known, so a visitor knows to contact IMC first. Its
+        // own limit keeps the list from being enumerated (finding PA-11).
+        Route::get('imc-numbers/check', [RegistrationController::class, 'checkImcNumber'])
+            ->middleware('throttle:registration-check')
+            ->name('imc-numbers.check');
         Route::post('factories', [RegistrationController::class, 'factory'])
             ->middleware('throttle:registration')
             ->name('factories');
@@ -338,6 +345,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::post('notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
         Route::post('notifications/{notification}/read', [NotificationController::class, 'read'])->whereUuid('notification')->name('notifications.read');
         Route::patch('me', [AccountSettingsController::class, 'update'])->name('me.update');
+        Route::put('me/password', AccountPasswordController::class)
+            ->middleware('throttle:password-change')
+            ->name('me.password.update');
 
         Route::get('service-listings', [ServiceListingController::class, 'index'])->name('service-listings.index');
         Route::get('promotions', [ServicePromotionController::class, 'index'])->name('promotions.index');

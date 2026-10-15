@@ -9,7 +9,7 @@ use Illuminate\Validation\Rule;
  * Rules for the registration details factories and providers share (ADR-019): the legal
  * name, the address, the registration numbers and the uploaded documents. The shared
  * trait supplies format checks; each request decides which of these fields are required
- * and against which table the IMC number must be unique (OQ-35).
+ * and against which table the IMC number must be unique (OQ-59).
  */
 trait ValidatesOrganizationDetails
 {
@@ -17,7 +17,7 @@ trait ValidatesOrganizationDetails
      * Commercial and tax registration numbers, and the IMC file number: digits (Latin or
      * Arabic-Indic), letters, spaces, slashes and hyphens. Their official formats are not
      * documented, so nothing stricter is checked. The IMC number is unique within the
-     * table that this request's organization kind maps to (OQ-35).
+     * table that this request's organization kind maps to (OQ-59).
      */
     public const REGISTRATION_NUMBER_PATTERN = '/^[0-9A-Za-z\x{0660}-\x{0669} \/-]{1,50}$/u';
 
@@ -43,7 +43,7 @@ trait ValidatesOrganizationDetails
 
     /**
      * The database table the IMC number must be unique within for this request kind, or
-     * null when no uniqueness check applies (OQ-35).
+     * null when no uniqueness check applies (OQ-59).
      */
     protected function imcNumberTable(): ?string
     {

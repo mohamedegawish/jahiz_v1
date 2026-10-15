@@ -16,6 +16,7 @@ Base: `/api/v1`. Authenticated endpoints need `Authorization: Bearer <token>`. A
 | --- | --- | --- | --- | --- |
 | `POST /auth/login` | none | `email`, `password`, `device_name` (≤100) | 200 `data: {token_type: "Bearer", access_token, expires_at, user}` (`user` as in `GET /me`) | 422 generic `These credentials do not match our records.` (unknown email, wrong password, deactivated); 429 after 5 failures/min per email+IP or 20 per 15 min per account |
 | `POST /auth/logout` | token | — | 204; revokes the current token | 401 |
+| `POST /auth/logout-all` | token | — | 204; revokes **every** token of the account, this one included (audited `auth.logged_out_everywhere`) | 401 |
 | `POST /auth/forgot-password` | none | `email` | **202** `data.message` (identical for every email); the link is emailed by a queued job | 422 invalid email format; 429 (5/min per IP) |
 | `POST /auth/reset-password` | none | `token`, `email`, `password`, `password_confirmation` | 200 `data.message`; sets the password, revokes all tokens, marks the email verified | 422 `errors.token`: `This password reset link is invalid or has expired.` (any failure); 422 `errors.password` policy (≥12 characters, ≤72 bytes, confirmed); 429 |
 
@@ -28,8 +29,8 @@ Multipart form data (`Content-Type: multipart/form-data`); lists are sent as `se
 | Method & path | Auth | Request | Success | Errors |
 | --- | --- | --- | --- | --- |
 | `GET /registration/options` | none | — | 200 `data: {sectors[], factory_sizes[], service_categories[] (with services), documents: {logo, legal}: {extensions, max_kb}}` | — |
-| `GET /registration/imc-numbers/check?number=` | none | `number`* (an IMC number) | 200 `data: {exists: bool}` — whether the number is on the IMC-registered list, so a visitor knows to contact IMC before filling the form | 422 (missing or malformed number) |
-| `POST /registration/factories` | none; `throttle:registration` (10/hour/IP) | `name`*, `legal_name`*, `size`*, `sectors[]`* (≥1), `contact_name`*, `contact_job_title`*, `contact_email`* (RFC + DNS), `password`* + `password_confirmation`* (min 8, max 72 — the member signs in immediately with no email round-trip), `contact_phone`*, `website` (optional), `governorate`*, `city`*, `address`*, `commercial_registration_number`*, `tax_registration_number`*, `imc_number`* (must be on the IMC-registered list, matched by the number only), files* (logo, commercial_registration_document, tax_registration_document) | **202** `data.message` — identical whether or not the email already has an account. The factory, its first member (verified) and the documents are created synchronously and the member signs in immediately; a duplicate email creates nothing and sends nothing. | 422 per field — an unregistered `imc_number` answers «هذا الرقم غير مسجل لدى الهيئة، برجاء التواصل مع الهيئة.»; 429 |
+| `GET /registration/imc-numbers/check?number=` | none; 20/min per IP | `number`* (an IMC number) | 200 `data: {exists: bool}` — whether the number is on the IMC-registered list, so a visitor knows to contact IMC before filling the form | 422 (missing or malformed number); 429 |
+| `POST /registration/factories` | none; `throttle:registration` (10/hour/IP) | `name`*, `legal_name`*, `size`*, `sectors[]`* (≥1), `contact_name`*, `contact_job_title`*, `contact_email`* (RFC + DNS), `password`* + `password_confirmation`* (the platform policy: ≥12 characters, ≤72 bytes, sent exactly as typed — the member signs in immediately with no email round-trip), `contact_phone`*, `website` (optional), `governorate`*, `city`*, `address`*, `commercial_registration_number`*, `tax_registration_number`*, `imc_number`* (must be on the IMC-registered list, matched by the number only, and not already registered by another factory), files* (logo, commercial_registration_document, tax_registration_document) | **202** `data.message` — identical whether or not the email already has an account, and worded for both cases. The factory, its first member and the documents are created synchronously and the member signs in immediately; the email stays **unverified** until a reset link sent to it is used ([OQ-58](open-questions.md#oq-58)). A duplicate email creates nothing and sends nothing. | 422 per field — an unregistered `imc_number` answers «هذا الرقم غير مسجل لدى الهيئة، برجاء التواصل مع الهيئة.»; one already registered: `This IMC number is already registered to another organization.`; 429 |
 | `POST /registration/service-providers` | none; `throttle:registration` | `name`*, `legal_name`*, `description` (≤5000), `representative_name`*, `job_title`*, `email`* (RFC + DNS), `password`* + `password_confirmation`* (as above), `phone`*, `website`*, `dx_experience_years`, `governorate`*, `city`*, `address`*, `commercial_registration_number`*, `tax_registration_number`*, `imc_number`* (unique), `sectors[]` (catalog codes), `services[]` (catalog codes), files (all optional) | **202** as above. The provider starts `pending`; approval fields sent are ignored. | 422; 429 |
 
 Registration numbers (`commercial_registration_number`, `tax_registration_number`, `imc_number`): digits (Latin or Arabic-Indic), letters, spaces, `/` and `-`, up to 50 characters. The IMC number must be unique across all organizations (factories and providers). A factory self-registration is additionally accepted only when its `imc_number` is on the IMC-registered list below (matched by the number only).
@@ -261,7 +262,7 @@ Payment: `{id, invoice_id, gateway, gateway_reference, status (pending | succeed
 | `GET /users/{id}` | admin; the account itself; colleagues in the same organization | — | 200 | 401, **404** for anyone else |
 | `PATCH /users/{id}` | admin | `name`, `is_active` (both optional). Other fields, including `role` and organization, are ignored. | 200; deactivation revokes all tokens and reset links | 401, 403, 404, 422 (own deactivation, or the last active administrator) |
 
-User resource: `{id, name, email, role, organization, is_active, created_at}`. Passwords, tokens and remember tokens are never returned.
+User resource: `{id, name, email, role, organization, is_active, email_verified, created_at}`. `email_verified` is false until a link sent to the address was used (a self-registered address is unproven, [OQ-58](open-questions.md#oq-58)). Passwords, tokens and remember tokens are never returned.
 
 ## Audit log
 
@@ -314,6 +315,7 @@ Each answer of a stored assessment carries `question_text_ar`, `choice_label_ar`
 | `GET /notifications?filter[unread]=` | any account | own notifications, `meta.unread_count` |
 | `POST /notifications/{id}/read`, `POST /notifications/read-all` | any account | another account's id is 404 |
 | `PATCH /me` | any account | `name`, `email_notifications` only |
+| `PUT /me/password` | any account; 5/min per account | `current_password`*, `password`* + `password_confirmation`* (the platform policy; must differ from the current one) → 200 `data.message`; every **other** token of the account is revoked, this one stays valid; audited `auth.password_changed` (no secret stored). 422 `errors.current_password` when wrong, nothing changed |
 | `GET /service-listings?search=&filter[category\|service\|recommended\|promoted\|approval_status\|provider]=` | factory (eligible only), provider (own), IMC | promoted first, `promotion.label` «إعلان»; `filter[recommended]` needs an assessment (422) |
 | `GET/POST /promotions`, `PATCH /promotions/{id}`, `POST /promotions/{id}/end` | IMC (`promotions.manage`) | the provider must offer the service; never deleted |
 | `GET /reports/marketplace?from=&to=&filter[service]=` | factory, provider (own), IMC | UTC days, ≤ 2 years; counts, rates with base, issued invoice totals per currency |
@@ -344,7 +346,8 @@ Each answer of a stored assessment carries `question_text_ar`, `choice_label_ar`
 | --- | --- | --- |
 | `GET /public/announcements` | anyone, no token | live announcements (published, started, not ended), by `sort_order` then newest; public fields only; at most 30 |
 | `GET /public/announcements/{id}`, `GET /public/announcements/{id}/cover` | anyone, no token | 404 unless live (and, for the cover, unless it has one) |
-| `GET /announcements?filter[published]=` | IMC (`announcements.manage`) | every announcement with `state` (`draft`, `scheduled`, `live`, `ended`), `sort_order`, `starts_at`, `published_at` |
+| Public media (`/public/landing/logo`, `/public/announcements/{id}/cover`, `/public/announcements/{id}/video`) | anyone, no token | answers HTTP `Range` requests (206) so browsers can stream and seek a video; `Cache-Control: public, max-age=300` (every other API response stays `no-store`); 404 when the recorded file is missing |
+| `GET /announcements?filter[published]=&filter[placement]=` | IMC (`announcements.manage`) | every announcement with `state` (`draft`, `scheduled`, `live`, `ended`), `sort_order`, `starts_at`, `published_at` |
 | `POST /announcements`, `PATCH /announcements/{id}` | IMC | `title`*, `description`*, `color`* (`green`, `blue`, `orange`, `red`, `beige`, `purple`), `badge_text`, `link_path` (a path of the web client only), `tags` (≤ 5), `countdown_text`, `cover_alt`, `sort_order` (0–1000), `starts_at`, `ends_at` (after `starts_at`); 422 otherwise |
 | `POST /announcements/{id}/publish`, `/unpublish` | IMC | 409 when already in that state |
 | `DELETE /announcements/{id}` | IMC | 204 for a draft; 409 while published |
@@ -362,7 +365,7 @@ Each answer of a stored assessment carries `question_text_ar`, `choice_label_ar`
 | --- | --- | --- |
 | `GET /public/landing` | anyone, no token | the single settings row (same shape for everyone); a null field or empty list means the web client shows its bundled copy |
 | `GET /public/landing/logo` | anyone, no token | the uploaded platform logo inline; 404 when none was uploaded |
-| `PUT /landing` | IMC (`announcements.manage`) | only the fields sent change; an explicit null restores the bundled copy; a no-op writes nothing (no audit entry); changes are audited by field names only |
+| `PUT /landing` | IMC (`announcements.manage`) | also `ad_rotation_seconds` (whole seconds 2–120, or null for the client default): how long each landing ad slide stays on screen, the same for every visitor. Only the fields sent change; an explicit null restores the bundled copy; a no-op writes nothing (no audit entry); changes are audited by field names only |
 | `POST /landing/logo`, `DELETE /landing/logo` | IMC | multipart `file` (jpg, png, webp — no SVG — logo size limit); replaces the previous file; deleting restores the bundled mark |
 
 ## Financial and contract policies (ADR-023)

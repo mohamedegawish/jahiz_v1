@@ -6,6 +6,7 @@ use App\Models\ImcRegisteredNumber;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use XMLReader;
 use ZipArchive;
@@ -29,6 +30,14 @@ class ImcRegisteredNumberImporter
     private const NAME_HEADERS = ['name', 'factory', 'factory name', 'اسم', 'الاسم', 'اسم المصنع', 'المصنع', 'المنشأة'];
 
     private const NUMBER_HEADERS = ['number', 'num', 'no', 'imc', 'imc number', 'imc_number', 'imc no', 'رقم', 'الرقم', 'رقم imc', 'الرقم المسجل', 'رقم القيد'];
+
+    /**
+     * The largest worksheet or shared-strings part read from a workbook, expanded. The
+     * upload is at most 5 MB, but a zip can expand far beyond it (a zip bomb), and each
+     * part is read into memory; the declared size is checked first (finding PA-28).
+     * Twenty megabytes hold hundreds of thousands of rows.
+     */
+    public const MAX_XML_BYTES = 20 * 1024 * 1024;
 
     /**
      * @return array{created: int, updated: int, skipped: int, errors: list<array{row: int, number: string|null, reason: string}>}
@@ -167,7 +176,7 @@ class ImcRegisteredNumberImporter
     {
         $zip = new ZipArchive;
         if ($zip->open($file->getRealPath()) !== true) {
-            throw new RuntimeException('The Excel file could not be read.');
+            throw self::unreadable('The Excel file could not be read. Save it again as .xlsx (or as CSV) and retry.');
         }
 
         try {
@@ -184,15 +193,10 @@ class ImcRegisteredNumberImporter
             }
 
             if ($sheetPath === null) {
-                throw new RuntimeException('The Excel file holds no worksheet.');
+                throw self::unreadable('The Excel file holds no worksheet.');
             }
 
-            $xml = $zip->getFromName($sheetPath);
-            if ($xml === false) {
-                throw new RuntimeException('The Excel file could not be read.');
-            }
-
-            return $this->readSheetRows($xml, $shared);
+            return $this->readSheetRows((string) $this->readPart($zip, $sheetPath), $shared);
         } finally {
             $zip->close();
         }
@@ -203,8 +207,8 @@ class ImcRegisteredNumberImporter
      */
     private function readSharedStrings(ZipArchive $zip): array
     {
-        $xml = $zip->getFromName('xl/sharedStrings.xml');
-        if ($xml === false) {
+        $xml = $this->readPart($zip, 'xl/sharedStrings.xml');
+        if ($xml === null) {
             return [];
         }
 
@@ -228,6 +232,43 @@ class ImcRegisteredNumberImporter
         $reader->close();
 
         return $shared;
+    }
+
+    /**
+     * One part of the workbook, expanded, or null when the workbook has no such part. A
+     * part over MAX_XML_BYTES is refused from its declared size, and the read itself stops
+     * after that many bytes in case the declared size lies (finding PA-28).
+     */
+    private function readPart(ZipArchive $zip, string $name): ?string
+    {
+        $stat = $zip->statName($name);
+        if ($stat === false) {
+            return null;
+        }
+
+        $tooLarge = 'The Excel file is too large to import. Split it into smaller files, or import it as CSV.';
+        if ($stat['size'] > self::MAX_XML_BYTES) {
+            throw self::unreadable($tooLarge);
+        }
+
+        $xml = $zip->getFromName($name, self::MAX_XML_BYTES + 1);
+        if ($xml === false) {
+            throw self::unreadable('The Excel file could not be read. Save it again as .xlsx (or as CSV) and retry.');
+        }
+        if (strlen($xml) > self::MAX_XML_BYTES) {
+            throw self::unreadable($tooLarge);
+        }
+
+        return $xml;
+    }
+
+    /**
+     * A workbook the importer cannot use is the administrator's file problem: a 422 on
+     * the file field, not a server error (finding PA-33).
+     */
+    private static function unreadable(string $message): ValidationException
+    {
+        return ValidationException::withMessages(['file' => $message]);
     }
 
     /**

@@ -107,6 +107,11 @@ export const UsersRoles: React.FC = () => {
                         <Badge variant={u.is_active ? 'success' : 'neutral'} size="sm">
                           {u.is_active ? 'نشط' : 'موقوف'}
                         </Badge>
+                        {!u.email_verified && (
+                          <span className="block mt-1">
+                            <Badge variant="warning" size="sm">البريد غير مؤكَّد</Badge>
+                          </span>
+                        )}
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="flex items-center justify-center gap-2">

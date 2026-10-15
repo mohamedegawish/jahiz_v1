@@ -1,32 +1,25 @@
-# React + TypeScript + Vite
+# Jahez web client
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React 19 + Vite + Tailwind single-page app for the Jahez API (`../jahez_api`). Every business rule, permission and score is decided by the API; the client keeps only the bearer token in browser storage (`src/auth/tokenStore.ts`, enforced by `tests/noLocalEligibility.test.ts`).
 
-Currently, two official plugins are available:
+## Requirements
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Node.js 22.12 or later (`package.json` `engines`).
+- `VITE_API_BASE_URL`: the API base URL, e.g. `http://localhost:8000/api/v1` locally (copy `.env.example` to `.env`). There is no fallback: the app refuses to start without it.
 
-## React Compiler
+## Commands
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm ci
+npm run dev        # http://localhost:3000 (the API's CORS allow-list expects this origin)
+npm run lint       # oxlint
+npm test           # node:test over tests/*.test.ts
+npm run build      # type check + production bundle in dist/
+npx vite preview   # serves dist/ on :3000 with the production Content-Security-Policy
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Production
+
+- The Docker image (`Dockerfile`) builds with `VITE_API_BASE_URL` (the `FRONT_API_URL` compose variable) and serves `dist/` with nginx (`docker/nginx.conf`): SPA fallback, `index.html` never cached, fingerprinted assets cached for a year.
+- Security headers come from `docker/security-headers.inc`. The Content-Security-Policy lives in `docker/csp.txt`; its API-origin placeholder becomes the origin of `VITE_API_BASE_URL` at build time. `vite preview` sends the same policy, so check a build against it before release: no inline scripts, and no other origins except Google Fonts.
+- The password rules shown to users (`src/lib/password.ts`) mirror the API's `Password::defaults()`: at least 12 characters, at most 72 bytes. Passwords are sent exactly as typed.

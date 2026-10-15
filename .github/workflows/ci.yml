@@ -1,0 +1,107 @@
+# Quality gates on every push and pull request: the same commands the project runs
+# locally before a release (jahez_api/docs/testing/strategy.md, front/README.md).
+# Nothing here deploys; deployment stays a Coolify redeploy.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API (tests, Larastan, Pint, composer audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: jahez_api
+    services:
+      mysql:
+        # The production engine (docker-compose.yml); locking tests need a real MySQL.
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: jahez_testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USERNAME: root
+      DB_PASSWORD: root
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql, mbstring, intl, zip, bcmath, exif, pcntl, fileinfo
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare the environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Tests (MySQL 8.4)
+        run: php artisan test --compact
+
+      - name: Static analysis (Larastan level 8)
+        run: composer analyse
+
+      - name: Code style (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Dependency advisories
+        run: composer audit
+
+  front:
+    name: Web client (lint, tests, build, npm audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: front
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: https://api.example.invalid/api/v1
+      - name: Dependency advisories (runtime dependencies)
+        run: npm audit --omit=dev --audit-level=high
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

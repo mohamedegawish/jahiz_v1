@@ -147,3 +147,28 @@ describe('IMC administration', function () {
         expect(LandingSetting::query()->count())->toBe(0);
     });
 });
+
+// Finding PA-15: the ad rotation period lived in the administrator's browser storage, so
+// visitors always got the default. It is a landing setting now.
+describe('ad rotation period', function () {
+    it('is set by IMC and given to every visitor', function () {
+        Sanctum::actingAs(User::factory()->imcAdmin()->create());
+        $this->putJson(route('api.v1.landing.update'), ['ad_rotation_seconds' => 9])
+            ->assertOk()
+            ->assertJsonPath('data.ad_rotation_seconds', 9);
+
+        app('auth')->forgetGuards();
+        $this->getJson(route('api.v1.public.landing.show'))->assertOk()->assertJsonPath('data.ad_rotation_seconds', 9);
+
+        Sanctum::actingAs(User::factory()->imcAdmin()->create());
+        $this->putJson(route('api.v1.landing.update'), ['ad_rotation_seconds' => null])->assertOk()->assertJsonPath('data.ad_rotation_seconds', null);
+    });
+
+    it('accepts only whole seconds from 2 to 120', function (mixed $seconds) {
+        Sanctum::actingAs(User::factory()->imcAdmin()->create());
+
+        $this->putJson(route('api.v1.landing.update'), ['ad_rotation_seconds' => $seconds])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['ad_rotation_seconds']);
+    })->with([1, 121, 2.5, 'fast']);
+});

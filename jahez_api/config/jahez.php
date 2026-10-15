@@ -101,14 +101,14 @@ return [
              * scale is not approved, so evaluations record a written assessment per
              * criterion and no score.
              */
-            'scale_max' => env('JAHEZ_PROVIDER_EVALUATION_SCALE_MAX') !== null ? (int) env('JAHEZ_PROVIDER_EVALUATION_SCALE_MAX') : null,
+            'scale_max' => filled(env('JAHEZ_PROVIDER_EVALUATION_SCALE_MAX')) ? (int) env('JAHEZ_PROVIDER_EVALUATION_SCALE_MAX') : null,
 
             /*
              * Minimum weighted total (0-100) shown as "meets the pass mark" (OQ-13).
              * Null: not approved, so no pass or fail is shown. Approval stays a manual
              * IMC decision either way (owner decision 2026-10-03).
              */
-            'pass_mark' => env('JAHEZ_PROVIDER_EVALUATION_PASS_MARK'),
+            'pass_mark' => filled(env('JAHEZ_PROVIDER_EVALUATION_PASS_MARK')) ? env('JAHEZ_PROVIDER_EVALUATION_PASS_MARK') : null,
         ],
     ],
 
@@ -184,7 +184,7 @@ return [
          * started. No gateway adapter ships with the application yet; one is registered
          * in `gateways` (key => class implementing App\Billing\PaymentGateway).
          */
-        'payment_gateway' => env('JAHEZ_PAYMENT_GATEWAY'),
+        'payment_gateway' => filled(env('JAHEZ_PAYMENT_GATEWAY')) ? env('JAHEZ_PAYMENT_GATEWAY') : null,
 
         'gateways' => [],
     ],

@@ -2,9 +2,10 @@
 
 namespace App\Models;
 
+use App\Http\Responses\StoredFileResponse;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * The single row of landing-page content IMC edits (the logo, hero texts,
@@ -45,6 +46,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * @property string|null $footer_tagline
  * @property string|null $footer_copyright
  * @property string|null $footer_supervision
+ * @property int|null $ad_rotation_seconds
  */
 class LandingSetting extends Model
 {
@@ -92,6 +94,7 @@ class LandingSetting extends Model
         'footer_tagline',
         'footer_copyright',
         'footer_supervision',
+        'ad_rotation_seconds',
     ];
 
     /**
@@ -109,6 +112,7 @@ class LandingSetting extends Model
             'service_cards' => 'array',
             'how_steps' => 'array',
             'faq_items' => 'array',
+            'ad_rotation_seconds' => 'integer',
         ];
     }
 
@@ -128,13 +132,11 @@ class LandingSetting extends Model
 
     /**
      * The logo image inline, with the content type detected at upload. The caller
-     * decides who may read it (SecurityHeaders keeps API responses out of caches).
+     * decides who may read it (SecurityHeaders lets shared caches keep only the public copies briefly).
      */
-    public function logoResponse(): StreamedResponse
+    public function logoResponse(): Response
     {
-        return Storage::disk((string) $this->logo_disk)->response((string) $this->logo_path, null, [
-            'Content-Type' => (string) $this->logo_mime_type,
-        ], 'inline');
+        return StoredFileResponse::inline((string) $this->logo_disk, (string) $this->logo_path, (string) $this->logo_mime_type);
     }
 
     public function deleteLogoFile(): void

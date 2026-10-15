@@ -19,8 +19,11 @@ export interface AuthContextValue {
   sessionExpired: boolean;
   /** POST /auth/login -> store token -> GET /me. Throws ApiError (422 generic, 429 with Retry-After). */
   login: (email: string, password: string, remember: boolean) => Promise<CurrentUser>;
-  /** POST /auth/logout, then clear the local session. Resolves false when the server could not be reached. */
-  logout: () => Promise<boolean>;
+  /**
+   * POST /auth/logout (or /auth/logout-all with `everywhere`, which signs out every device),
+   * then clear the local session. Resolves false when the server could not be reached.
+   */
+  logout: (options?: { everywhere?: boolean }) => Promise<boolean>;
   /** Re-run GET /me (after an `error`). */
   retry: () => void;
   /** Reload the current user from GET /me (for example after renaming the user's organization). */

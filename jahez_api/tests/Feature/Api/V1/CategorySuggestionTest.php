@@ -114,3 +114,23 @@ it('blocks a pending factory from collecting offers in the cart (409), like send
         'provider_id' => $provider->id,
     ])->assertCreated();
 });
+
+// Finding PA-30: the list validated before it authorized, so an outsider learned from a
+// 422 that the endpoint applies to someone. Authorization now runs first (CR-28 pattern).
+it('returns 404 to a factory member before validating the filters', function () {
+    Sanctum::actingAs(User::factory()->factoryMember(Factory::factory()->create())->create());
+
+    $this->getJson(route('api.v1.category-suggestions.index', ['filter' => ['status' => 'not-a-status']]))->assertNotFound();
+    $this->getJson(route('api.v1.category-suggestions.index'))->assertNotFound();
+});
+
+it('allow-lists the filters of the suggestion list', function () {
+    Sanctum::actingAs(suggestionAdmin());
+
+    $this->getJson(route('api.v1.category-suggestions.index', ['filter' => ['status' => 'not-a-status']]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['filter.status']);
+    $this->getJson(route('api.v1.category-suggestions.index', ['filter' => ['unknown' => '1']]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['filter']);
+});

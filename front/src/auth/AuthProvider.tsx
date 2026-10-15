@@ -100,10 +100,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const logout = useCallback(async (): Promise<boolean> => {
+  const logout = useCallback(async (options?: { everywhere?: boolean }): Promise<boolean> => {
     let revoked = true;
     try {
-      await api.auth.logout();
+      await (options?.everywhere === true ? api.auth.logoutAll() : api.auth.logout());
     } catch {
       revoked = false; // offline: the token is dropped locally but may stay valid on the server until it expires
     }

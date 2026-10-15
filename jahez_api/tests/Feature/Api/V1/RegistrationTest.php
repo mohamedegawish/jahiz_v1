@@ -10,6 +10,7 @@ use App\Models\ImcRegisteredNumber;
 use App\Models\OrganizationDocument;
 use App\Models\ServiceProvider;
 use App\Models\User;
+use App\Notifications\AccountInvitation;
 use App\Services\OrganizationRegistrar;
 use Database\Seeders\ReferenceDataSeeder;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -17,6 +18,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -126,7 +128,7 @@ describe('options', function () {
 });
 
 describe('factory registration', function () {
-    it('creates the factory, its verified first member and its documents, and the member signs in immediately', function () {
+    it('creates the factory, its first member and its documents, and the member signs in immediately', function () {
         $response = $this->post(route('api.v1.registration.factories'), factoryRegistration([
             'logo' => UploadedFile::fake()->image('logo.png', 200, 200),
             'commercial_registration_document' => UploadedFile::fake()->create('cr.pdf', 300, 'application/pdf'),
@@ -161,8 +163,9 @@ describe('factory registration', function () {
             expect($document->path)->toStartWith('documents/registrations/');
         }
 
-        // No email is ever sent from registration: the member is verified and signs in at once.
-        expect($member->email_verified_at)->not->toBeNull();
+        // No email is ever sent from registration: the member signs in at once, but nothing
+        // proved the address, so it stays unverified until a reset link is used (PA-08).
+        expect($member->email_verified_at)->toBeNull();
         Notification::assertNothingSent();
 
         $this->postJson(route('api.v1.auth.login'), ['email' => 'mona@nile-foods.example', 'password' => 'correct horse battery staple', 'device_name' => 'web'])
@@ -274,7 +277,7 @@ describe('provider registration', function () {
             ->and($provider->services()->pluck('code')->sort()->values()->all())->toBe(['automation_ot.01', 'erp_business_applications.01'])
             ->and($member->role)->toBe(Role::ProviderMember)
             ->and($member->service_provider_id)->toBe($provider->id)
-            ->and($member->email_verified_at)->not->toBeNull()
+            ->and($member->email_verified_at)->toBeNull()
             ->and($provider->documents()->sole()->type->value)->toBe('tax_registration');
         Notification::assertNothingSent();
         expect(AuditLog::query()->where('event', AuditEvent::ServiceProviderRegistered)->sole()->metadata['documents'])->toBe(['tax_registration']);
@@ -481,5 +484,113 @@ describe('direct password', function () {
         $this->postJson(route('api.v1.registration.factories'), factoryRegistration([
             'contact_email' => 'user@invalid',
         ]))->assertUnprocessable()->assertJsonValidationErrors(['contact_email']);
+    });
+});
+
+describe('production audit hardening', function () {
+    // PA-06: registration used min:8|max:72 (characters), not the platform policy
+    // (Password::defaults(): at least 12 characters, at most 72 bytes, the bcrypt limit).
+    it('applies the platform password policy to both registration forms', function (string $password) {
+        $this->post(route('api.v1.registration.factories'), factoryRegistration(['password' => $password, 'password_confirmation' => $password]), ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['password']);
+        $this->postJson(route('api.v1.registration.service-providers'), providerRegistration(['password' => $password, 'password_confirmation' => $password]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['password']);
+
+        $this->assertDatabaseCount('users', 0);
+    })->with([
+        'eleven characters' => 'elevenchars',
+        'over 72 bytes in 37 Arabic letters' => str_repeat('ك', 37),
+    ]);
+
+    it('keeps a password exactly as typed, surrounding spaces included', function () {
+        $password = '  spaced passphrase  ';
+        $this->post(route('api.v1.registration.factories'), factoryRegistration(['password' => $password, 'password_confirmation' => $password]), ['Accept' => 'application/json'])
+            ->assertAccepted();
+
+        $this->postJson(route('api.v1.auth.login'), ['email' => 'mona@nile-foods.example', 'password' => $password, 'device_name' => 'web'])->assertOk();
+    });
+
+    // PA-08: nothing proves a registrant owns the address; it is verified only once a reset
+    // link sent to it is used, and IMC reviewers see the difference.
+    it('marks the email verified only once a reset link sent to it is used', function () {
+        $this->post(route('api.v1.registration.factories'), factoryRegistration(), ['Accept' => 'application/json'])->assertAccepted();
+        $member = User::query()->where('email', 'mona@nile-foods.example')->sole();
+
+        Sanctum::actingAs(User::factory()->imcAdmin()->create());
+        $listed = collect($this->getJson(route('api.v1.users.index', ['per_page' => 100]))->assertOk()->json('data'))->firstWhere('id', $member->id);
+        expect($member->email_verified_at)->toBeNull()
+            ->and($listed['email_verified'])->toBeFalse();
+
+        $token = Password::broker()->createToken($member);
+        $this->postJson(route('api.v1.auth.password.store'), [
+            'token' => $token,
+            'email' => $member->email,
+            'password' => 'a brand new passphrase',
+            'password_confirmation' => 'a brand new passphrase',
+        ])->assertOk();
+
+        expect($member->refresh()->email_verified_at)->not->toBeNull();
+    });
+
+    // PA-09: a known email returned before hashing, so it answered faster than a new one.
+    it('hashes the password even when the email already has an account', function () {
+        User::factory()->create(['email' => 'mona@nile-foods.example']);
+        Hash::spy();
+
+        $this->post(route('api.v1.registration.factories'), factoryRegistration(), ['Accept' => 'application/json'])
+            ->assertAccepted()
+            ->assertExactJson(['data' => ['message' => RegistrationController::RESPONSE_MESSAGE]]);
+
+        Hash::shouldHaveReceived('make')->once();
+        expect(Factory::query()->count())->toBe(0);
+    });
+
+    // PA-10: the IMC number identifies one organization (docs/api-endpoints.md), but
+    // registration never checked that it was free.
+    it('refuses a second factory registration with an IMC number already registered', function () {
+        $this->post(route('api.v1.registration.factories'), factoryRegistration(), ['Accept' => 'application/json'])->assertAccepted();
+
+        $this->post(route('api.v1.registration.factories'), factoryRegistration(['contact_email' => 'someone-else@nile-foods.example']), ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['imc_number']);
+
+        expect(Factory::query()->count())->toBe(1)
+            ->and(User::query()->count())->toBe(1);
+    });
+
+    it('refuses a second provider registration with an IMC number already registered', function () {
+        $this->postJson(route('api.v1.registration.service-providers'), providerRegistration())->assertAccepted();
+
+        $this->postJson(route('api.v1.registration.service-providers'), providerRegistration(['email' => 'someone-else@delta-automation.example']))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['imc_number']);
+
+        expect(ServiceProvider::query()->count())->toBe(1);
+    });
+
+    it('keeps IMC numbers unique in the database, for concurrent registrations', function () {
+        Factory::factory()->create(['imc_number' => 'IMC-2026-500']);
+        ServiceProvider::factory()->create(['imc_number' => 'IMC-2026-500']);
+
+        expect(fn () => Factory::factory()->create(['imc_number' => 'IMC-2026-500']))->toThrow(UniqueConstraintViolationException::class)
+            ->and(fn () => ServiceProvider::factory()->create(['imc_number' => 'IMC-2026-500']))->toThrow(UniqueConstraintViolationException::class);
+
+        // Organizations without a number are not affected.
+        Factory::factory()->count(2)->create(['imc_number' => null]);
+        expect(Factory::query()->whereNull('imc_number')->count())->toBe(2);
+    });
+
+    // PA-11: the public check answers whether a number is on the IMC list; its own limit
+    // keeps the list from being enumerated.
+    it('limits the public IMC-number checks per address', function () {
+        foreach (range(1, 20) as $attempt) {
+            $this->getJson(route('api.v1.registration.imc-numbers.check', ['number' => "IMC-{$attempt}"]))->assertOk();
+        }
+
+        $this->getJson(route('api.v1.registration.imc-numbers.check', ['number' => 'IMC-21']))
+            ->assertTooManyRequests()
+            ->assertHeader('Retry-After');
     });
 });

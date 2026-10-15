@@ -20,8 +20,9 @@ use Illuminate\Support\Str;
 /**
  * Creates the organization of a public self-registration synchronously, inside the
  * request (ADR-019): the organization, its first member (with the password chosen on
- * the form, verified immediately), its documents and the audit entry, in one
- * transaction. No email is ever sent from this path: the member signs in at once.
+ * the form; the email address stays unverified until a reset link proves it, PA-08),
+ * its documents and the audit entry, in one transaction. No email is ever sent from
+ * this path: the member signs in at once.
  *
  * The 202 response stays identical whether or not the email already has an account
  * (ADR-011): a duplicate email creates nothing and sends nothing.
@@ -144,7 +145,10 @@ class OrganizationRegistrar
         // Already a bcrypt hash from the controller: the `hashed` cast keeps it as-is
         // (Hash::isHashed guard), so the member signs in with the chosen password.
         $member->password = $account['password_hash'];
-        $member->email_verified_at = now();
+        // Nothing proved that the registrant owns the address: it stays unverified until a
+        // reset link sent to it is used (NewPasswordController), and IMC reviewers see that
+        // (finding PA-08). Signing in does not depend on it (ADR-028).
+        $member->email_verified_at = null;
         $member->role = $role;
         $member->factory_id = $organization instanceof Factory ? $organization->id : null;
         $member->service_provider_id = $organization instanceof ServiceProvider ? $organization->id : null;

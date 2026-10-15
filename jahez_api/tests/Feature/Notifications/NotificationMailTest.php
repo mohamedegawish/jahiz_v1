@@ -75,3 +75,21 @@ it('retries a failing email on the database queue, then records it in failed_job
         ->and(DB::table('failed_jobs')->value('exception'))->toContain('421 Service not available')
         ->and($user->notifications()->count())->toBe(1);
 });
+
+// Finding PA-25: an email body interpolates names that users typed (organization, request
+// and service names). Laravel renders a mail line as Markdown, so a name such as
+// "[update](https://evil.example)" became a live link in an IMC-branded email.
+it('shows a user-typed name as text, never as a link of its own, in the email', function () {
+    $user = User::factory()->imcAdmin()->make();
+    $body = 'سجّلت المنشأة الصناعية «[حدّث بياناتك](https://evil.example/login) ![x](https://evil.example/p.png)» في المنصة.';
+
+    $html = (string) (new PlatformEventMail(NotificationEvent::OrganizationRegistered, $body, '/admin/approvals/factories/1'))
+        ->toMail($user)
+        ->render();
+
+    expect($html)->not->toContain('href="https://evil.example')
+        ->and($html)->not->toContain('src="https://evil.example')
+        ->and($html)->toContain('[حدّث بياناتك](https://evil.example/login)')
+        // The platform's own action link is still a link.
+        ->and($html)->toContain('href="'.rtrim((string) config('api.frontend_url'), '/').'/admin/approvals/factories/1"');
+});

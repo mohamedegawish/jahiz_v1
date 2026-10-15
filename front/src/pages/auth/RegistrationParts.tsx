@@ -12,8 +12,9 @@ export const FormSection: React.FC<{ title: string; description?: string; childr
 );
 
 /**
- * Shown after the API accepted a registration. The account already exists: the visitor
- * signs in immediately with the chosen email and password.
+ * Shown after the API accepted a registration. The API answers the same way whether or not
+ * the email already had an account (ADR-011: no account enumeration), so this text covers
+ * both cases: a new account signs in now; an existing one signs in or resets its password.
  */
 export const RegistrationSubmitted: React.FC<{ email: string; reviewNote?: string }> = ({ email, reviewNote }) => (
   <div role="status" className="space-y-4 text-center">
@@ -21,14 +22,16 @@ export const RegistrationSubmitted: React.FC<{ email: string; reviewNote?: strin
       <MailCheck className="w-6 h-6" />
     </div>
     <div className="space-y-1.5">
-      <h3 className="text-base font-bold text-[#172033]">تم إنشاء حسابك</h3>
+      <h3 className="text-base font-bold text-[#172033]">تم استلام طلب التسجيل</h3>
       <p className="text-xs text-[#667085] leading-relaxed">
-        أُنشئ حسابك على البريد <span className="font-bold text-[#172033]" dir="ltr">{email}</span> — سجّل الدخول الآن بالبريد الإلكتروني وكلمة المرور اللذين سجّلت بهما.
+        إذا لم يكن للبريد <span className="font-bold text-[#172033]" dir="ltr">{email}</span> حساب سابق فقد أُنشئ حسابك — سجّل الدخول الآن بالبريد الإلكتروني وكلمة المرور اللذين اخترتهما.
+        وإذا كان لهذا البريد حساب من قبل فلم يُنشأ حساب جديد: سجّل الدخول بكلمة مرورك الحالية أو استعدها من «نسيت كلمة المرور».
       </p>
       {reviewNote && <p className="text-xs text-[#003a75] font-semibold leading-relaxed">{reviewNote}</p>}
     </div>
     <div className="flex flex-col items-center gap-2 text-xs">
       <Link to="/login" className="font-bold text-[#003a75] hover:underline">الانتقال إلى تسجيل الدخول</Link>
+      <Link to="/forgot-password" className="text-[#003a75] hover:underline">نسيت كلمة المرور؟</Link>
       <Link to="/" className="text-[#667085] hover:underline">العودة إلى الصفحة الرئيسية</Link>
     </div>
   </div>

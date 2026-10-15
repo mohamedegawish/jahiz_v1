@@ -1,8 +1,11 @@
 {
-  "name": "temp-app",
+  "name": "jahez-front",
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

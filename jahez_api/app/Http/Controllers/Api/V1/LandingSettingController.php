@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response as HttpResponse;
 use Throwable;
 
 /**
@@ -36,7 +36,7 @@ class LandingSettingController extends Controller
     /**
      * The platform logo, when an administrator uploaded one.
      */
-    public function logo(): StreamedResponse
+    public function logo(): HttpResponse
     {
         $settings = LandingSetting::singleton();
         abort_unless($settings->hasLogo(), 404);

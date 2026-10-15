@@ -78,6 +78,43 @@ describe('authentication', function () {
         expect(onlyAuditEntry(AuditEvent::LoggedOut)->actor_user_id)->toBe($user->id);
     });
 
+    it('records signing out of every device, with the number of credentials revoked', function () {
+        $user = User::factory()->create();
+        bearerTokenFor($user);
+
+        $this->withToken(bearerTokenFor($user))->postJson(route('api.v1.auth.logout-all'))->assertNoContent();
+
+        $entry = onlyAuditEntry(AuditEvent::LoggedOutEverywhere);
+        expect($entry->actor_user_id)->toBe($user->id)
+            ->and($entry->subject_id)->toBe($user->id)
+            ->and($entry->metadata)->toEqual(['credentials_revoked' => 2]);
+    });
+
+    it('records a password change without the password, with the other credentials revoked', function () {
+        $user = User::factory()->create(['password' => 'the old passphrase']);
+        bearerTokenFor($user);
+
+        $this->withToken(bearerTokenFor($user))
+            ->putJson(route('api.v1.me.password.update'), ['current_password' => 'the old passphrase', 'password' => 'a much better passphrase', 'password_confirmation' => 'a much better passphrase'])
+            ->assertOk();
+
+        $entry = onlyAuditEntry(AuditEvent::PasswordChanged);
+        expect($entry->actor_user_id)->toBe($user->id)
+            ->and($entry->metadata)->toEqual(['other_credentials_revoked' => 1]);
+    });
+
+    it('changes no password when the audit entry cannot be written', function () {
+        $user = User::factory()->create(['password' => 'the old passphrase']);
+        $token = bearerTokenFor($user);
+        AuditLog::creating(fn (): never => throw new RuntimeException('Audit store unavailable.'));
+
+        $this->withToken($token)
+            ->putJson(route('api.v1.me.password.update'), ['current_password' => 'the old passphrase', 'password' => 'a much better passphrase', 'password_confirmation' => 'a much better passphrase'])
+            ->assertServerError();
+
+        expect(Hash::check('the old passphrase', $user->refresh()->password))->toBeTrue();
+    });
+
     it('records a password reset request from the job, with the address that requested it', function () {
         $user = User::factory()->create();
         Notification::fake();

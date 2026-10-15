@@ -16,9 +16,12 @@
 # to those domains (see .env.docker.example).
 #
 # No service publishes host ports: traffic enters only through the Coolify
-# proxy (TLS), and services reach each other by service name. The API
-# entrypoint runs migrations on every start, so an update is:
+# proxy (TLS), and services reach each other by service name. Only the api
+# service migrates and seeds the reference data on start (RUN_MIGRATIONS=true);
+# the queue worker and the scheduler wait until it is healthy. An update is:
 #   git pull && docker compose up -d --build   (Coolify: redeploy / webhook)
+# Back up the database and the api-storage volume before an update
+# (jahez_api/docs/deployment.md §6).
 #
 # The frontend bakes FRONT_API_URL at build time: changing it requires a
 # rebuild (`docker compose up -d --build frontend`, or a Coolify redeploy).
@@ -48,13 +51,16 @@ services:
     build: ./jahez_api
     restart: unless-stopped
     environment:
+      # The one service that migrates and seeds the reference data on start.
+      RUN_MIGRATIONS: "true"
       APP_NAME: ${APP_NAME:-Jahez}
       APP_ENV: ${APP_ENV:-production}
       APP_DEBUG: ${APP_DEBUG:-false}
       APP_KEY: ${APP_KEY:?Generate with `php artisan key:generate --show` and paste it here}
       APP_URL: ${APP_URL:?Set the public HTTPS API URL, e.g. https://api.example.com}
       FRONTEND_URL: ${FRONTEND_URL:?Set the public HTTPS frontend URL, e.g. https://app.example.com}
-      LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+      # stderr: the container log (docker logs / Coolify), not a file in the shared volume.
+      LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
       LOG_LEVEL: ${LOG_LEVEL:-warning}
       DB_CONNECTION: ${DB_CONNECTION:-mysql}
       DB_HOST: mysql
@@ -69,7 +75,25 @@ services:
       BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-*}
+      # Business policies (jahez_api/config/jahez.php, docs/deployment.md §2). Each default
+      # is the application's own; leave a policy unset until the owner decides it.
       JAHEZ_BUSINESS_TIMEZONE: ${JAHEZ_BUSINESS_TIMEZONE:-Africa/Cairo}
+      JAHEZ_FACTORY_APPROVAL_REQUIRED: ${JAHEZ_FACTORY_APPROVAL_REQUIRED:-true}
+      JAHEZ_FACTORY_LEGAL_CHANGES_REVIEWED: ${JAHEZ_FACTORY_LEGAL_CHANGES_REVIEWED:-true}
+      JAHEZ_FACTORY_REQUIRED_FIELDS: ${JAHEZ_FACTORY_REQUIRED_FIELDS:-sectors}
+      JAHEZ_PROVIDER_REQUIRED_FIELDS: ${JAHEZ_PROVIDER_REQUIRED_FIELDS:-}
+      JAHEZ_DIRECTORY_SHOWS_CONTACT_DETAILS: ${JAHEZ_DIRECTORY_SHOWS_CONTACT_DETAILS:-false}
+      JAHEZ_PROVIDER_EVALUATION_SCALE_MAX: ${JAHEZ_PROVIDER_EVALUATION_SCALE_MAX:-}
+      JAHEZ_PROVIDER_EVALUATION_PASS_MARK: ${JAHEZ_PROVIDER_EVALUATION_PASS_MARK:-}
+      JAHEZ_MARKETPLACE_SINGLE_AWARD: ${JAHEZ_MARKETPLACE_SINGLE_AWARD:-true}
+      JAHEZ_AGREEMENTS_IMC_APPROVAL_REQUIRED: ${JAHEZ_AGREEMENTS_IMC_APPROVAL_REQUIRED:-true}
+      JAHEZ_NOTIFICATION_EMAILS: ${JAHEZ_NOTIFICATION_EMAILS:-true}
+      JAHEZ_PAYMENT_GATEWAY: ${JAHEZ_PAYMENT_GATEWAY:-}
+      JAHEZ_DOCUMENTS_DISK: ${JAHEZ_DOCUMENTS_DISK:-local}
+      JAHEZ_LOGO_MAX_KB: ${JAHEZ_LOGO_MAX_KB:-2048}
+      JAHEZ_LEGAL_DOCUMENT_MAX_KB: ${JAHEZ_LEGAL_DOCUMENT_MAX_KB:-5120}
+      JAHEZ_ANNOUNCEMENT_VIDEO_MAX_KB: ${JAHEZ_ANNOUNCEMENT_VIDEO_MAX_KB:-20480}
+      JAHEZ_REGISTRATIONS_PER_HOUR: ${JAHEZ_REGISTRATIONS_PER_HOUR:-10}
       MAIL_MAILER: ${MAIL_MAILER:?Set a real mailer (smtp); the go-live gate refuses log/array}
       MAIL_SCHEME: ${MAIL_SCHEME:-smtp}
       MAIL_HOST: ${MAIL_HOST:?Set the SMTP host}
@@ -78,7 +102,7 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:?Set the sender address, e.g. noreply@example.com}
     volumes:
-      # Uploaded documents and the SQLite-free runtime state live here.
+      # Uploaded documents and the runtime state live here.
       - api-storage:/var/www/html/storage
     expose:
       - "80"
@@ -87,7 +111,8 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 60s
+      # The first start migrates and seeds before Apache answers.
+      start_period: 120s
     depends_on:
       mysql:
         condition: service_healthy
@@ -95,7 +120,11 @@ services:
   queue:
     build: ./jahez_api
     restart: unless-stopped
-    command: ["php", "artisan", "queue:work", "--tries=3", "--sleep=3"]
+    # www-data like Apache, so files it writes to the shared volume stay writable by all.
+    user: www-data
+    # --timeout stays below the queue's retry_after (90 s); --max-time recycles the worker
+    # hourly. The pcntl extension (Dockerfile) lets it stop gracefully on SIGTERM.
+    command: ["php", "artisan", "queue:work", "--tries=3", "--sleep=3", "--timeout=60", "--max-time=3600"]
     environment:
       APP_NAME: ${APP_NAME:-Jahez}
       APP_ENV: ${APP_ENV:-production}
@@ -103,7 +132,8 @@ services:
       APP_KEY: ${APP_KEY:?Generate with `php artisan key:generate --show` and paste it here}
       APP_URL: ${APP_URL:?Set the public HTTPS API URL, e.g. https://api.example.com}
       FRONTEND_URL: ${FRONTEND_URL:?Set the public HTTPS frontend URL, e.g. https://app.example.com}
-      LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+      # stderr: the container log (docker logs / Coolify), not a file in the shared volume.
+      LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
       LOG_LEVEL: ${LOG_LEVEL:-warning}
       DB_CONNECTION: ${DB_CONNECTION:-mysql}
       DB_HOST: mysql
@@ -118,7 +148,25 @@ services:
       BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-*}
+      # Business policies (jahez_api/config/jahez.php, docs/deployment.md §2). Each default
+      # is the application's own; leave a policy unset until the owner decides it.
       JAHEZ_BUSINESS_TIMEZONE: ${JAHEZ_BUSINESS_TIMEZONE:-Africa/Cairo}
+      JAHEZ_FACTORY_APPROVAL_REQUIRED: ${JAHEZ_FACTORY_APPROVAL_REQUIRED:-true}
+      JAHEZ_FACTORY_LEGAL_CHANGES_REVIEWED: ${JAHEZ_FACTORY_LEGAL_CHANGES_REVIEWED:-true}
+      JAHEZ_FACTORY_REQUIRED_FIELDS: ${JAHEZ_FACTORY_REQUIRED_FIELDS:-sectors}
+      JAHEZ_PROVIDER_REQUIRED_FIELDS: ${JAHEZ_PROVIDER_REQUIRED_FIELDS:-}
+      JAHEZ_DIRECTORY_SHOWS_CONTACT_DETAILS: ${JAHEZ_DIRECTORY_SHOWS_CONTACT_DETAILS:-false}
+      JAHEZ_PROVIDER_EVALUATION_SCALE_MAX: ${JAHEZ_PROVIDER_EVALUATION_SCALE_MAX:-}
+      JAHEZ_PROVIDER_EVALUATION_PASS_MARK: ${JAHEZ_PROVIDER_EVALUATION_PASS_MARK:-}
+      JAHEZ_MARKETPLACE_SINGLE_AWARD: ${JAHEZ_MARKETPLACE_SINGLE_AWARD:-true}
+      JAHEZ_AGREEMENTS_IMC_APPROVAL_REQUIRED: ${JAHEZ_AGREEMENTS_IMC_APPROVAL_REQUIRED:-true}
+      JAHEZ_NOTIFICATION_EMAILS: ${JAHEZ_NOTIFICATION_EMAILS:-true}
+      JAHEZ_PAYMENT_GATEWAY: ${JAHEZ_PAYMENT_GATEWAY:-}
+      JAHEZ_DOCUMENTS_DISK: ${JAHEZ_DOCUMENTS_DISK:-local}
+      JAHEZ_LOGO_MAX_KB: ${JAHEZ_LOGO_MAX_KB:-2048}
+      JAHEZ_LEGAL_DOCUMENT_MAX_KB: ${JAHEZ_LEGAL_DOCUMENT_MAX_KB:-5120}
+      JAHEZ_ANNOUNCEMENT_VIDEO_MAX_KB: ${JAHEZ_ANNOUNCEMENT_VIDEO_MAX_KB:-20480}
+      JAHEZ_REGISTRATIONS_PER_HOUR: ${JAHEZ_REGISTRATIONS_PER_HOUR:-10}
       MAIL_MAILER: ${MAIL_MAILER:?Set a real mailer (smtp); the go-live gate refuses log/array}
       MAIL_SCHEME: ${MAIL_SCHEME:-smtp}
       MAIL_HOST: ${MAIL_HOST:?Set the SMTP host}
@@ -132,13 +180,14 @@ services:
       mysql:
         condition: service_healthy
       api:
-        condition: service_started
+        condition: service_healthy
 
   scheduler:
-    # Runs the Laravel scheduler (sanctum:prune-expired, payments:reconcile)
-    # every minute, so no host cron is needed on Coolify.
+    # Runs the Laravel scheduler (routes/console.php: token and failed-job pruning,
+    # expired reset tokens, payments:reconcile) every minute, so no host cron is needed.
     build: ./jahez_api
     restart: unless-stopped
+    user: www-data
     command: ["php", "artisan", "schedule:work"]
     environment:
       APP_NAME: ${APP_NAME:-Jahez}
@@ -147,7 +196,8 @@ services:
       APP_KEY: ${APP_KEY:?Generate with `php artisan key:generate --show` and paste it here}
       APP_URL: ${APP_URL:?Set the public HTTPS API URL, e.g. https://api.example.com}
       FRONTEND_URL: ${FRONTEND_URL:?Set the public HTTPS frontend URL, e.g. https://app.example.com}
-      LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+      # stderr: the container log (docker logs / Coolify), not a file in the shared volume.
+      LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
       LOG_LEVEL: ${LOG_LEVEL:-warning}
       DB_CONNECTION: ${DB_CONNECTION:-mysql}
       DB_HOST: mysql
@@ -162,7 +212,25 @@ services:
       BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-*}
+      # Business policies (jahez_api/config/jahez.php, docs/deployment.md §2). Each default
+      # is the application's own; leave a policy unset until the owner decides it.
       JAHEZ_BUSINESS_TIMEZONE: ${JAHEZ_BUSINESS_TIMEZONE:-Africa/Cairo}
+      JAHEZ_FACTORY_APPROVAL_REQUIRED: ${JAHEZ_FACTORY_APPROVAL_REQUIRED:-true}
+      JAHEZ_FACTORY_LEGAL_CHANGES_REVIEWED: ${JAHEZ_FACTORY_LEGAL_CHANGES_REVIEWED:-true}
+      JAHEZ_FACTORY_REQUIRED_FIELDS: ${JAHEZ_FACTORY_REQUIRED_FIELDS:-sectors}
+      JAHEZ_PROVIDER_REQUIRED_FIELDS: ${JAHEZ_PROVIDER_REQUIRED_FIELDS:-}
+      JAHEZ_DIRECTORY_SHOWS_CONTACT_DETAILS: ${JAHEZ_DIRECTORY_SHOWS_CONTACT_DETAILS:-false}
+      JAHEZ_PROVIDER_EVALUATION_SCALE_MAX: ${JAHEZ_PROVIDER_EVALUATION_SCALE_MAX:-}
+      JAHEZ_PROVIDER_EVALUATION_PASS_MARK: ${JAHEZ_PROVIDER_EVALUATION_PASS_MARK:-}
+      JAHEZ_MARKETPLACE_SINGLE_AWARD: ${JAHEZ_MARKETPLACE_SINGLE_AWARD:-true}
+      JAHEZ_AGREEMENTS_IMC_APPROVAL_REQUIRED: ${JAHEZ_AGREEMENTS_IMC_APPROVAL_REQUIRED:-true}
+      JAHEZ_NOTIFICATION_EMAILS: ${JAHEZ_NOTIFICATION_EMAILS:-true}
+      JAHEZ_PAYMENT_GATEWAY: ${JAHEZ_PAYMENT_GATEWAY:-}
+      JAHEZ_DOCUMENTS_DISK: ${JAHEZ_DOCUMENTS_DISK:-local}
+      JAHEZ_LOGO_MAX_KB: ${JAHEZ_LOGO_MAX_KB:-2048}
+      JAHEZ_LEGAL_DOCUMENT_MAX_KB: ${JAHEZ_LEGAL_DOCUMENT_MAX_KB:-5120}
+      JAHEZ_ANNOUNCEMENT_VIDEO_MAX_KB: ${JAHEZ_ANNOUNCEMENT_VIDEO_MAX_KB:-20480}
+      JAHEZ_REGISTRATIONS_PER_HOUR: ${JAHEZ_REGISTRATIONS_PER_HOUR:-10}
       MAIL_MAILER: ${MAIL_MAILER:?Set a real mailer (smtp); the go-live gate refuses log/array}
       MAIL_SCHEME: ${MAIL_SCHEME:-smtp}
       MAIL_HOST: ${MAIL_HOST:?Set the SMTP host}
@@ -176,13 +244,14 @@ services:
       mysql:
         condition: service_healthy
       api:
-        condition: service_started
+        condition: service_healthy
 
   frontend:
     build:
       context: ./front
       args:
-        VITE_API_BASE_URL: ${FRONT_API_URL:-http://localhost:8000/api/v1}
+        # Required: the bundle cannot reach the API without it (no localhost fallback).
+        VITE_API_BASE_URL: ${FRONT_API_URL:?Set FRONT_API_URL to the public API base URL, e.g. https://api.example.com/api/v1}
     restart: unless-stopped
     expose:
       - "80"

@@ -158,6 +158,8 @@ export function createEndpoints(client: Pick<ApiClient, 'request'>) {
       login: (payload: LoginPayload) =>
         data(send<DataEnvelope<LoginResult>>('POST', '/auth/login', { body: payload, auth: false })),
       logout: () => send<void>('POST', '/auth/logout'),
+      /** Revokes every token of the account, this one included (signs out all devices). */
+      logoutAll: () => send<void>('POST', '/auth/logout-all'),
       forgotPassword: (email: string) =>
         data(send<DataEnvelope<MessageResult>>('POST', '/auth/forgot-password', { body: { email }, auth: false })),
       resetPassword: (payload: { token: string; email: string; password: string; password_confirmation: string }) =>
@@ -265,7 +267,8 @@ export function createEndpoints(client: Pick<ApiClient, 'request'>) {
         })),
       publicGet: (id: number, signal?: AbortSignal) =>
         data(send<DataEnvelope<PublicAnnouncement>>('GET', `/public/announcements/${id}`, { signal, auth: false })),
-      list: (p: ListQuery<{ published?: boolean }> = {}) => get<Paginated<AdminAnnouncement>>('/announcements', listQuery(p), p.signal),
+      list: (p: ListQuery<{ published?: boolean; placement?: AdminAnnouncement['placement'] }> = {}) =>
+        get<Paginated<AdminAnnouncement>>('/announcements', listQuery(p), p.signal),
       create: (payload: AnnouncementPayload) => data(send<DataEnvelope<AdminAnnouncement>>('POST', '/announcements', { body: payload })),
       update: (id: number, payload: AnnouncementPayload) => data(send<DataEnvelope<AdminAnnouncement>>('PATCH', `/announcements/${id}`, { body: payload })),
       publish: (id: number) => data(send<DataEnvelope<AdminAnnouncement>>('POST', `/announcements/${id}/publish`)),
@@ -592,6 +595,9 @@ export function createEndpoints(client: Pick<ApiClient, 'request'>) {
     /** The signed-in account's own settings. */
     account: {
       update: (payload: AccountSettingsPayload) => data(send<DataEnvelope<CurrentUser>>('PATCH', '/me', { body: payload })),
+      /** Needs the current password; the API signs out every other device of the account. */
+      changePassword: (payload: { current_password: string; password: string; password_confirmation: string }) =>
+        data(send<DataEnvelope<MessageResult>>('PUT', '/me/password', { body: payload })),
     },
 
     /** The signed-in account's in-app notifications, newest first; `meta.unread_count`. */
