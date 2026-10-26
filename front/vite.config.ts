@@ -5,10 +5,11 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
 // The production Content-Security-Policy (docker/csp.txt, applied by nginx). `vite preview`
-// sends the same policy, so a built bundle can be checked against it locally.
+// sends the same policy, so a built bundle can be checked against it locally. A same-origin
+// base URL (/api/v1) is covered by 'self', so the API origin placeholder is then dropped.
 const contentSecurityPolicy = (apiBaseUrl: string | undefined): string => {
-  const apiOrigin = apiBaseUrl ? new URL(apiBaseUrl).origin : ''
-  return readFileSync(path.resolve(__dirname, 'docker/csp.txt'), 'utf8').trim().replaceAll('__API_ORIGIN__', apiOrigin)
+  const apiOrigin = apiBaseUrl && /^https?:\/\//.test(apiBaseUrl) ? ` ${new URL(apiBaseUrl).origin}` : ''
+  return readFileSync(path.resolve(__dirname, 'docker/csp.txt'), 'utf8').trim().replaceAll(' __API_ORIGIN__', apiOrigin)
 }
 
 // https://vite.dev/config/

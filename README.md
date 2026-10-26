@@ -30,7 +30,7 @@ docker compose --env-file .env.docker exec api php artisan app:create-admin admi
 
 - Generate `APP_KEY` with `php artisan key:generate --show` from `jahez_api/` (never reuse a dev key).
 - Update: back up the database and the `api-storage` volume (`jahez_api/docs/deployment.md` §6), then `git pull && docker compose --env-file .env.docker up -d --build`. The `api` service migrates, seeds the reference data and logs the go-live gate on every start (optionally also creates the first admin via `INITIAL_ADMIN_*` and seeds demo data via `SEED_DEMO_DATA`, see `.env.docker.example`); the queue worker and the scheduler wait until it is healthy.
-- `FRONT_API_URL` is required (the frontend build stops without it); for local Docker use `http://localhost:8000/api/v1`.
-- Coolify: deploy the repo as a Docker Compose resource (base = repo root, without `docker-compose.local.yml`), paste `.env.docker` values into Environment Variables, add one domain per `api` / `frontend` service (internal port 80). Redeploy to update.
+- `FRONT_API_URL` defaults to `/api/v1`: the browser calls the API on the frontend's own domain and the frontend's nginx forwards `/api/` to the `api` service (`API_UPSTREAM`, default `http://api:80`). An absolute public API URL still works for a cross-origin setup.
+- Coolify: deploy the repo as a Docker Compose resource (base = repo root, without `docker-compose.local.yml`), paste `.env.docker` values into Environment Variables, add a domain on the `frontend` service (internal port 80); a domain on the `api` service is optional. Redeploy to update.
 - Terminate TLS in front of the stack and set `TRUSTED_PROXIES`; the go-live gate refuses plain-http URLs.
 - Full notes: `jahez_api/docs/deployment.md` (§7) and `.env.docker.example`.

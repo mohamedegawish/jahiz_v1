@@ -35,7 +35,7 @@ export interface ApiClient {
 }
 
 export interface ApiClientConfig {
-  /** Includes the version prefix, for example `http://localhost:8000/api/v1`. */
+  /** Includes the version prefix, for example `http://localhost:8000/api/v1` or same-origin `/api/v1`. */
   baseUrl: string;
   tokenStore: TokenStore;
   /** Called after a 401 (or a locally expired token) once the token has been cleared. */

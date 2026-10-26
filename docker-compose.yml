@@ -9,11 +9,14 @@
 # directory = repository root. Do NOT add docker-compose.local.yml there.
 # Every ${VAR} below becomes an editable variable in the Coolify UI
 # (Environment Variables); ${VAR:?message} blocks deployment while empty.
-# Configure two domains in Coolify, both pointing at internal port 80:
-#   api service      -> https://api.example.com
+# Configure the frontend domain in Coolify (internal port 80):
 #   frontend service -> https://app.example.com
-# Then set APP_URL / FRONTEND_URL / FRONT_API_URL / CORS_ALLOWED_ORIGINS
-# to those domains (see .env.docker.example).
+# The frontend's nginx serves the API on that same domain under /api/ by
+# forwarding to the api service over this stack's network (FRONT_API_URL=/api/v1,
+# API_UPSTREAM=http://api:80). A domain on the api service
+# (https://api.example.com, internal port 80) is optional and only needed for a
+# cross-origin setup. Set APP_URL / FRONTEND_URL / CORS_ALLOWED_ORIGINS
+# accordingly (see .env.docker.example).
 #
 # No service publishes host ports: traffic enters only through the Coolify
 # proxy (TLS), and services reach each other by service name. Only the api
@@ -25,6 +28,7 @@
 #
 # The frontend bakes FRONT_API_URL at build time: changing it requires a
 # rebuild (`docker compose up -d --build frontend`, or a Coolify redeploy).
+# API_UPSTREAM is read when the frontend container starts (a restart is enough).
 
 services:
   mysql:
@@ -264,8 +268,14 @@ services:
     build:
       context: ./front
       args:
-        # Required: the bundle cannot reach the API without it (no localhost fallback).
-        VITE_API_BASE_URL: ${FRONT_API_URL:?Set FRONT_API_URL to the public API base URL, e.g. https://api.example.com/api/v1}
+        # /api/v1: the browser calls the API on the frontend's own domain and this
+        # service's nginx forwards /api/ to API_UPSTREAM. An absolute public API URL
+        # (https://api.example.com/api/v1) is the previous, cross-origin setup.
+        VITE_API_BASE_URL: ${FRONT_API_URL:-/api/v1}
+    environment:
+      # The api service on this stack's network (service name + internal port). Plain
+      # HTTP inside the Docker network; never a public URL.
+      API_UPSTREAM: ${API_UPSTREAM:-http://api:80}
     restart: unless-stopped
     expose:
       - "80"

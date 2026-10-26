@@ -23,7 +23,7 @@ function resolveClient(): ApiClient {
   if (!baseUrl) {
     // Deliberately no localhost fallback: a production build must never silently point at a dev API.
     throw new ConfigurationError(
-      'VITE_API_BASE_URL is not set. Copy .env.example to .env and set it (for example http://localhost:8000/api/v1).',
+      'VITE_API_BASE_URL is not set. Copy .env.example to .env and set it (for example http://localhost:8000/api/v1, or /api/v1 behind the nginx proxy).',
     );
   }
   client = createApiClient({
@@ -43,8 +43,9 @@ const lazyClient: Pick<ApiClient, 'request'> = {
 export const api = createEndpoints(lazyClient);
 
 /**
- * The absolute URL of a public API resource (a live announcement's cover image), for an <img>
- * tag. Only for paths the API marks public: no token is attached.
+ * The URL of a public API resource (a live announcement's cover image), for an <img> tag:
+ * absolute, or a same-origin path when the base URL is one (/api/v1). Only for paths the API
+ * marks public: no token is attached.
  */
 export function publicApiUrl(path: string): string {
   return `${String(import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')}${path}`;

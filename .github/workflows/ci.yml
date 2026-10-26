@@ -91,7 +91,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_API_BASE_URL: https://api.example.invalid/api/v1
+          VITE_API_BASE_URL: /api/v1
       - name: Dependency advisories (runtime dependencies)
         run: npm audit --omit=dev --audit-level=high
 
